@@ -1,0 +1,10 @@
+{
+  "samples": ["pivi-pro"],
+  "engines": [
+    {"engine":"rapidocr","device":"cpu","languages":["en"],"threads":4},
+    {"engine":"paddleocr","device":"cpu","languages":["en"],"threads":4,"python_path":".engines/paddleocr/Scripts/python.exe"},
+    {"engine":"easyocr","device":"cpu","languages":["en"],"threads":4,"python_path":".engines/easyocr/Scripts/python.exe"}
+  ],
+  "mode":"saved", "preprocessing":"raw", "warmups":1, "repetitions":5,
+  "timeout_s":180, "iou_threshold":0.5
+}

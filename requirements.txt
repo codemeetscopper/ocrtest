@@ -1,0 +1,4 @@
+# Dashboard, headless runner, and the default RapidOCR CPU engine.
+# Install from this checkout: python -m pip install -r requirements.txt
+# GPU and other OCR engines use isolated environments; see scripts/setup-engine.ps1.
+-e .[rapidocr]

@@ -1,0 +1,9 @@
+{
+  "samples":["pivi-pro"],
+  "engines":[
+    {"engine":"rapidocr","device":"gpu","languages":["en"],"threads":4},
+    {"engine":"paddleocr","device":"gpu","languages":["en"],"threads":4},
+    {"engine":"easyocr","device":"gpu","languages":["en"],"threads":4}
+  ],
+  "mode":"saved", "preprocessing":"raw", "warmups":1, "repetitions":5, "timeout_s":180
+}

@@ -1,0 +1,6 @@
+{
+  "samples": ["pivi-pro"],
+  "engines": [{"engine":"rapidocr","device":"cpu","languages":["en"],"threads":4}],
+  "mode":"saved", "preprocessing":"raw", "warmups":1, "repetitions":5,
+  "timeout_s":120, "iou_threshold":0.5
+}

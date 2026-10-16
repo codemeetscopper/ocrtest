@@ -1,0 +1,2 @@
+# Compatibility with the singular filename. Canonical dependencies: requirements.txt.
+-r requirements.txt

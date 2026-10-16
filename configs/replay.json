@@ -1,0 +1,6 @@
+{
+  "samples": ["pivi-pro"],
+  "engines": [{"engine":"rapidocr","device":"cpu","languages":["en"],"threads":4}],
+  "mode":"replay", "preprocessing":"raw", "warmups":1, "repetitions":20,
+  "replay_fps":10, "queue_size":2, "queue_policy":"latest", "timeout_s":120
+}

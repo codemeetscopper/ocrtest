@@ -1,0 +1,16 @@
+.venv/
+.engines/
+__pycache__/
+.pytest_cache/
+.test-tmp/
+.test-gpu-fix/
+build/
+dist/
+*.egg-info/
+data/runs/
+data/uploads/
+data/captures/
+data/annotations/
+data/models/
+data/.benchmark.lock
+*.log
