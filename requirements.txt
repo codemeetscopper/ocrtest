@@ -1,4 +1,9 @@
-# Dashboard, headless runner, and the default RapidOCR CPU engine.
-# Install from this checkout: python -m pip install -r requirements.txt
-# GPU and other OCR engines use isolated environments; see scripts/setup-engine.ps1.
--e .[rapidocr]
+# All four OCR Python components and CPU frameworks, plus the dashboard.
+# Complete installation (native Tesseract + optional isolated CUDA environments):
+#   python install.py
+# Python packages only: python -m pip install -r requirements.txt
+# Use 64-bit Python 3.12. CUDA frameworks are installed separately to avoid conflicts.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+torchvision==0.29.1+cpu
+-e .[rapidocr,paddleocr,easyocr,tesseract]

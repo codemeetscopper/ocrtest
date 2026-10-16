@@ -24,7 +24,7 @@ function fixture() {
     displayedSource:null, displayedRecord:null, record:null, running:true,
     currentRecord:() => context.record, busy:() => context.running,
     currentCandidate:() => context.candidate || {records:[]},
-    renderEvidence:()=>{},
+    renderEvidence:()=>{}, decorateTerms:()=>{},
     renderOverlay:() => {context.overlayFrame=context.displayedRecord?.frame_id;},
     selectSample:() => {context.restored=true;}, sampleId:'pivi-pro', encodeURIComponent, esc:String};
   vm.createContext(context);vm.runInContext(code,context);

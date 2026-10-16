@@ -2,35 +2,31 @@
 
 A local Windows OCR benchmarking app with a browser workbench and a headless Python runner. It uses real inference, keeps each engine in a separate persistent process, and runs candidates sequentially. The supplied Pivi Pro image is included as a development fixture.
 
-## Start this checkout
+## Install and start — Python only
 
-The app environment is `.venv`. Run from this project directory:
+Use **64-bit Python 3.12**. No PowerShell scripts, activation scripts, administrator installer, or execution-policy changes are needed. From this checkout:
 
-```powershell
-.\start.ps1
-```
+~~~text
+python install.py
+python start.py
+~~~
 
-Open **http://127.0.0.1:8765**. Alternatively:
+The installer creates/reuses .venv and installs **all four OCR Python components and CPU frameworks from requirements.txt**: RapidOCR/ONNX Runtime, PaddleOCR/PaddlePaddle, EasyOCR/PyTorch, and pytesseract. It also provisions Tesseract's native runtime and English language data. By default, --device auto installs separate CUDA environments for RapidOCR, PaddleOCR, and EasyOCR when NVIDIA hardware is detected. Tesseract remains CPU-only.
 
-```powershell
-.\.venv\Scripts\python.exe -m ocrbench serve
-```
+~~~text
+python install.py --device cpu
+python install.py --device gpu
+python install.py --python C:/Python312/python.exe
+python start.py --port 8766
+~~~
 
-The server binds to loopback. Images, annotations, and run records stay on this computer. Initial engine provisioning may download model files from the engine's model host; inference uses the installed local models.
+Choose --python when your default Python is not 3.12. Environments also require Python 3.12. The bootstrap Python needs pip or ensurepip. Failures stop with a nonzero exit code and can be retried.
 
-## Fresh installation
+For Python packages only, **python -m pip install -r requirements.txt** now installs every OCR Python component and CPU framework; requirement.txt is an alias. A pip requirements file cannot provision a native executable or isolate CPU/CUDA framework builds. **python install.py is the complete requirements-based installation command**, performing those additional steps automatically. NVIDIA driver installation remains a host prerequisite.
 
-Use standard 64-bit Python 3.12 as the initial Windows baseline. Other Python versions depend on each engine's available wheels. Python 3.14 is not assumed compatible with the optional engines.
+The portable Windows Tesseract runtime is installed under .engines/tesseract-native using conda-forge packages via the [official standalone micromamba distribution](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html#manual-installation). It does not install Conda globally, activate a shell, change system PATH, or request administrator rights. Existing Tesseract installations are reused. OCRBENCH_TESSERACT and the tesseract_cmd engine option override discovery.
 
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[rapidocr,test]"
-.\start.ps1
-```
-
-For a requirements-file installation, run `python -m pip install -r requirements.txt` from this checkout. This installs the app and the default RapidOCR CPU engine from `pyproject.toml`; `requirement.txt` is an alias. Provision the other engines and GPU runtimes separately with `scripts/setup-engine.ps1` as described below.
-
-Keep this checkout: fixture data and the local worker source live here. This is a checkout-based application, not a standalone installer.
+Open **http://127.0.0.1:8765**. The server binds to loopback. Images, annotations, and records stay on this computer. Initial provisioning downloads packages; first inference may download models. Keep this checkout because fixture data and worker sources live here.
 
 ## Workbench workflow
 
@@ -49,54 +45,32 @@ The supplied fixture includes positive PHONE/MEDIA queries, an absent NAVIGATION
 
 ## Engines and isolation
 
-Adapters are included for RapidOCR (ONNX Runtime), PaddleOCR 3 (PaddlePaddle), EasyOCR (PyTorch), and Tesseract (pytesseract plus the native executable). Optional engine environments belong in `.engines/<engine>/`. The app detects these automatically; custom interpreter paths can be set in **Environments**. Every engine gets its own worker; none of the OCR frameworks is imported in the dashboard process.
+The complete installer supplies RapidOCR, PaddleOCR, EasyOCR, and Tesseract, including their CPU frameworks/native runtime. All CPU Python components are available in the app environment. Existing isolated environments under .engines/<engine>/ are discovered and reused. Custom interpreters remain configurable in **Environments**. Each candidate runs in its own worker process. GPU builds always live in separate .engines/<engine>-gpu/ environments.
 
-```powershell
-.\scripts\setup-engine.ps1 -Engine paddleocr -Python C:\Python312\python.exe
-.\scripts\setup-engine.ps1 -Engine easyocr -Python C:\Python312\python.exe
-.\scripts\setup-engine.ps1 -Engine tesseract -Python C:\Python312\python.exe
-```
+To provision or repair one isolated engine:
 
-The setup helper uses a standard Python distribution with `ensurepip`. Tesseract additionally needs the native executable and appropriate `tessdata`; use `options.tesseract_cmd` if it is not on PATH. Tesseract uses codes such as `eng`, whereas the other engines commonly use `en`. Options are adapter-specific; headless configurations support different options and languages per candidate. The workbench's shared options apply to all selected engines.
+~~~text
+python scripts/setup_engine.py --engine paddleocr --python C:/Python312/python.exe
+python scripts/setup_engine.py --engine easyocr --python C:/Python312/python.exe
+python scripts/setup_engine.py --engine tesseract --python C:/Python312/python.exe
+python scripts/setup_engine.py --engine rapidocr --device gpu --python C:/Python312/python.exe
+python scripts/setup_engine.py --engine paddleocr --device gpu --python C:/Python312/python.exe
+python scripts/setup_engine.py --engine easyocr --device gpu --python C:/Python312/python.exe
+~~~
 
-CPU environments are the installation baseline. GPU configurations require the appropriate GPU packages, CUDA/cuDNN/driver compatibility, and an actual CUDA device. RapidOCR requires CUDA providers for every active ONNX stage; EasyOCR and PaddleOCR check the selected device. A requested GPU configuration cannot silently enter the CPU comparison. ONNX Runtime may still assign unsupported operations to CPU; provider identity is recorded as a mixed-capability CUDA route, not proof that every kernel executed on GPU. VRAM and GPU utilization currently remain `null`.
+CUDA setup uses ONNX Runtime 1.31.0 CUDA/cuDNN extras, PaddlePaddle GPU 3.3.1 from its official CUDA 13 index, and PyTorch 2.14.1 / torchvision 0.29.1 from the official CUDA 13 index. GPU interpreters are discovered automatically. A compatible NVIDIA driver and real CUDA device are required. Real-image preflight rejects silent CPU fallback. ONNX may assign unsupported operations to CPU, which its observed-device identity explicitly describes. GPU utilization and VRAM telemetry remain unavailable.
 
-### RapidOCR GPU setup
+The Paddle worker registers and preloads DLLs from its own pip NVIDIA folders, including nvidia/cu13/bin/x86_64 and nvidia/cudnn/bin, without editing system PATH. GPU synchronization uses paddle.device.synchronize. CPU Paddle defaults to enable_mkldnn=false because the tested Windows oneDNN route failed; overrides remain configurable.
 
-The CPU-only `onnxruntime` package cannot run CUDA, even on a computer with an NVIDIA GPU. Use the separate device environment:
+Tesseract uses language codes such as eng; the adapter accepts en for English. RapidOCR's default model is conservatively limited to en/ch_sim unless a recognition model is supplied. Language coverage and combinations remain engine-specific. Workbench options apply to every selected engine; headless configurations allow per-engine options. Custom model licensing/provenance remains a deployment check.
 
-```powershell
-.\scripts\setup-engine.ps1 -Engine rapidocr -Device gpu -Python C:\Python312\python.exe
-.\.venv\Scripts\python.exe -m ocrbench run configs/rapidocr-gpu.json
-```
+Use **? Terms & metrics** on any page, expand **What do these terms mean?**, or hover/focus a marked table heading. HTML exports include the same definitions. F1 balances precision/recall for exactly matching text and overlapping regions; higher is better. CER is character edits/reference characters; lower is better and it can exceed 100%. P95 is the 95th percentile of successful warm-call durations in milliseconds; lower is faster. Completed FPS is successful frames per measurement-loop wall second; higher is better. Peak RAM is sampled worker-tree resident memory in MB. Confidence is an engine score, not verified accuracy or a calibrated probability shared by engines. A dash means unavailable, never zero or a pass. The full glossary also covers units, arrows, missing values, IoU, cold start, warmups, queues, and application checks.
 
-This installs `onnxruntime-gpu[cuda,cudnn]==1.31.0` in `.engines/rapidocr-gpu`, including its pip-provided NVIDIA runtime libraries. It does not replace the CPU environment or install a machine-wide toolkit. The worker preloads the runtime DLLs before creating ONNX sessions, as described in the [ONNX Runtime CUDA documentation](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#preload-dlls). An appropriate NVIDIA driver is required.
-
-The dashboard and headless runner automatically select the dedicated GPU environment when the device is GPU. **Environments** also has separate CPU/shared and GPU interpreter overrides. Refresh the dashboard after adding an environment. Each active stage must report `CUDAExecutionProvider` after a real-image preflight; package presence alone is not a successful GPU check.
-
-### PaddleOCR and EasyOCR GPU setup
-
-These engines need their own GPU framework builds. The CPU PaddlePaddle package and Windows PyPI's CPU PyTorch build cannot execute CUDA. Install the CUDA frameworks from their official package indexes through the helper:
-
-```powershell
-.\scripts\setup-engine.ps1 -Engine paddleocr -Device gpu -Python C:\Python312\python.exe
-.\scripts\setup-engine.ps1 -Engine easyocr -Device gpu -Python C:\Python312\python.exe
-.\.venv\Scripts\python.exe -m ocrbench run configs/all-gpu.json
-```
-
-The helper provisions `.engines/paddleocr-gpu` with PaddlePaddle GPU 3.3.1 from the [official CUDA 13 index](https://www.paddlepaddle.org.cn/packages/stable/cu130/), and `.engines/easyocr-gpu` with PyTorch 2.14.1 / torchvision 0.29.1 CUDA 13 builds from the [official PyTorch index](https://download.pytorch.org/whl/cu130). It then installs the matching OCR package. Install framework builds before the OCR extras so generic dependencies do not select a CPU build. CUDA-enabled frameworks and CPU frameworks belong in separate environments.
-
-GPU runs automatically discover all three dedicated interpreters. Loading a historical failed GPU setup that used the app's known default CPU interpreter now uses automatic GPU selection. Explicit custom interpreter overrides still take precedence. Framework version, CUDA/cuDNN versions, observed device, and GPU name are recorded in successful run identity. Tesseract is a CPU-only baseline: the dashboard disables it for GPU runs and the API rejects that unsupported combination before starting a worker.
-
-On Windows, the Paddle worker registers and preloads DLLs from its own NVIDIA pip package folders, including the newer `nvidia/cu13/bin/x86_64` layout and `nvidia/cudnn/bin`. This fixes native cuBLAS loading errors without changing the system PATH. DLL directory handles remain alive for the worker's lifetime, and the registered paths are recorded in run identity. Paddle GPU synchronization uses `paddle.device.synchronize`.
-
-RapidOCR's default model coverage is conservatively limited by the adapter to `en`/`ch_sim` unless a recognition model path is supplied. Merely entering another language does not establish that its glyphs are supported. PaddleOCR defaults to `enable_mkldnn=false`: the provisioned Windows PaddlePaddle 3.3.1 backend failed preflight on the default oneDNN route. You can explicitly override and benchmark that setting. Custom model and weight licence review remains a deployment task. Provisioned dependency snapshots are in `locks/`.
-
-Official adapter references: [RapidOCR usage](https://rapidai.github.io/RapidOCRDocs/main/en/install_usage/rapidocr/usage/), [PaddleOCR Python API](https://paddlepaddle.github.io/PaddleOCR/main/en/version3.x/pipeline_usage/OCR.html), [EasyOCR API](https://jaided.ai/easyocr/documentation/), [pytesseract](https://github.com/madmaze/pytesseract).
+Official references: [ONNX CUDA](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html), [PaddleOCR installation](https://www.paddleocr.ai/main/en/version3.x/installation.html), [PyTorch packages](https://download.pytorch.org/whl/cu130), [pytesseract](https://github.com/madmaze/pytesseract).
 
 ## Headless runs and Python API
 
-```powershell
+```text
 .\.venv\Scripts\python.exe -m ocrbench run configs/sample.json
 .\.venv\Scripts\python.exe -m ocrbench run configs/compare.json
 .\.venv\Scripts\python.exe -m ocrbench run configs/replay.json

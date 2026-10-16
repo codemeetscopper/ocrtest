@@ -44,6 +44,15 @@ def test_no_csrf_mutations(client):
     assert client.post('/api/runs',json={},headers={'X-OCRBench':''}).status_code==403
 
 
+def test_metric_definitions_are_available_and_exported(client):
+    definitions = client.get('/api/glossary').json()
+    assert any(t['title'].startswith('CER') and '100%' in t['description'] for t in definitions)
+    assert any(t['title'] == 'Confidence' and 'not calibrated' in t['description'] for t in definitions)
+    from ocrbench.terms import glossary_html
+    html = glossary_html()
+    assert 'What do these terms mean?' in html and 'P95 latency' in html
+
+
 def test_session_frame_image_is_reviewable_without_entering_dataset(client, tmp_path, monkeypatch):
     import ocrbench.storage as storage
     from types import SimpleNamespace

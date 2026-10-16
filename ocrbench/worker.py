@@ -144,11 +144,25 @@ class Adapter:
                                      "gpu_name":paddle.device.cuda.get_device_name(0) if self.device == "gpu" else None}
         else:
             import pytesseract
+            from .native import tesseract_command, tesseract_data
             if self.device != "cpu":
                 raise ValueError("Tesseract baseline supports CPU only")
-            if opts.get("tesseract_cmd"):
-                pytesseract.pytesseract.tesseract_cmd = opts["tesseract_cmd"]
-            pytesseract.get_tesseract_version()
+            command = opts.get("tesseract_cmd") or tesseract_command()
+            if command:
+                pytesseract.pytesseract.tesseract_cmd = command
+                data = opts.get('tessdata_dir') or tesseract_data(command)
+                if data:
+                    os.environ['TESSDATA_PREFIX'] = str(data)
+            self.languages = ['eng' if language == 'en' else language for language in self.languages]
+            if os.environ.get('TESSDATA_PREFIX'):
+                tessdata = Path(os.environ['TESSDATA_PREFIX'])
+                self.models = [str(tessdata/f'{language}.traineddata') for language in self.languages]
+                self.effective_options['tessdata_dir'] = str(tessdata)
+            self.effective_options['tesseract_cmd'] = pytesseract.pytesseract.tesseract_cmd
+            native_version = str(pytesseract.get_tesseract_version())
+            self.runtime_identity = {"framework": "tesseract", "version": native_version,
+                                     "executable": pytesseract.pytesseract.tesseract_cmd,
+                                     "tessdata": os.environ.get('TESSDATA_PREFIX')}
             self.model = pytesseract
             self.observed = "cpu"
         self.version = importlib.metadata.version({"rapidocr": "rapidocr", "easyocr": "easyocr", "paddleocr": "paddleocr", "tesseract": "pytesseract"}[self.engine])

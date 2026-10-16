@@ -4,6 +4,7 @@ const names = {rapidocr:'RapidOCR',paddleocr:'PaddleOCR',easyocr:'EasyOCR',tesse
 const fmt = (n, digits=1) => n == null ? '—' : Number(n).toFixed(digits);
 const pct = n => n == null ? '—' : fmt(n*100,1)+'%';
 let samples=[], system={}, runs=[], currentRun=null, sampleId='pivi-pro', mode='saved', candidateIndex=0, frameIndex=0, evidenceTab='text', pollTimer;
+let terms=[];
 let envs={};try{envs=JSON.parse(localStorage.getItem('ocrbench-environments')||'{}')}catch{}
 let annotationDraft=null, annotationJsonMode=false, dragStart=null, pendingPolygon=null;
 let historySelected=new Set(), historyCompare=false, historySort={key:'created',direction:-1};
@@ -25,9 +26,23 @@ function engineInterpreter(engine){
   return ($('device').value==='gpu'?(envs[engine+'-gpu']||info?.gpu_python_path):null)||envs[engine]||info?.python_path||null;
 }
 function busy(){return currentRun&&['queued','running'].includes(currentRun.status)}
+function renderTerms(){
+  const body=`<dl class="term-list">${terms.map(t=>`<dt>${esc(t.title)}</dt><dd>${esc(t.description)}</dd>`).join('')}</dl>`;
+  $('terms-content').innerHTML=body;
+  document.querySelectorAll('.view').forEach(view=>view.insertAdjacentHTML('beforeend',`<details class="metric-guide"><summary>What do these terms mean?</summary>${body}</details>`));
+}
+function decorateTerms(){
+  const normalize=s=>s.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const aliases=new Map(terms.flatMap(t=>t.aliases.map(a=>[normalize(a),t.description])));
+  document.querySelectorAll('th').forEach(th=>{
+    const help=aliases.get(normalize(th.textContent));
+    if(help){th.title=help;th.tabIndex=0;th.setAttribute('aria-description',help);th.dataset.term='true'}
+  });
+}
 
 async function init(){
-  [system,samples,runs]=await Promise.all([api('/system'),api('/samples'),api('/runs')]);
+  [system,samples,runs,terms]=await Promise.all([api('/system'),api('/samples'),api('/runs'),api('/glossary')]);
+  renderTerms();
   $('server-status').textContent='Workspace connected';
   renderEngines();renderSamples();renderEnvironments();renderHistory();
   if(runs.length){await loadRun(runs[0].id)}
@@ -226,7 +241,7 @@ function renderRun(){
   $('frame-select').innerHTML=records.length?records.map((r,i)=>`<option value="${i}" ${i===frameIndex?'selected':''}>${currentRun.config.mode==='live'?`Frame ${i+1} · ${esc(r.frame_id)}`:`${esc(r.sample_id)} · #${r.repetition+1}`}</option>`).join(''):'<option>No frames yet</option>';
   const c=currentCandidate();
   $('result-note').textContent=c?.summary?.quality_scored_attempts?`Strict Unicode · ${c.summary.unique_samples} unique samples · ${c.summary.quality_scored_attempts} scored attempts. Repetition does not add independent scene diversity.`:'Quality scores require reviewed, complete annotations. Latency and throughput use measured calls only.';
-  renderEvidence();renderSourceFrame();renderOverlay();
+  renderEvidence();renderSourceFrame();renderOverlay();decorateTerms();
 }
 function renderEvidence(){
   const c=currentCandidate(), r=currentRecord();
@@ -269,6 +284,7 @@ function renderHistory(){
   $('history-selection').textContent=`${historySelected.size} runs selected`;
   $('compare-selected').disabled=historySelected.size<2;$('compare-selected').textContent=historyCompare?'Show all runs':'Compare selected';
   $('history-note').textContent=`${historyCompare?'Selected comparison · ':''}${visible.length} engine results from ${new Set(visible.map(row=>row.r.id)).size} runs. Click a column heading to sort. Select any engine row to include its whole run.`;
+  decorateTerms();
   document.querySelectorAll('[data-history-sort]').forEach(b=>b.onclick=()=>{const key=b.dataset.historySort;historySort={key,direction:historySort.key===key?-historySort.direction:key==='created'?-1:1};renderHistory()});
   document.querySelectorAll('[data-compare-run]').forEach(b=>b.onchange=()=>{b.checked?historySelected.add(b.dataset.compareRun):historySelected.delete(b.dataset.compareRun);renderHistory()});
   document.querySelectorAll('[data-open-run]').forEach(b=>b.onclick=guard(async()=>{await loadRun(b.dataset.openRun);candidateIndex=Number(b.dataset.openCandidate);frameIndex=currentRun.config.mode==='live'?Math.max(0,(currentCandidate()?.records.length||0)-1):0;const r=currentRecord();if(r&&samples.some(s=>s.id===r.sample_id))selectSample(r.sample_id);renderRun();showView('workbench')}));
@@ -292,7 +308,7 @@ function applyConfig(c){
   });saveEnvs();$('all-samples').checked=c.samples.length>1;refreshDeviceOptions();
 }
 function renderEnvironments(){
-  $('environment-list').innerHTML=system.engines.map(e=>`<section class="panel environment-card"><h3>${names[e.id]} <span class="badge ${e.installed?'success':'warning'}">${e.installed?'Installed in app environment':'Optional environment'}</span></h3><p>${e.id==='rapidocr'?'ONNX Runtime · CPU or CUDA. Record model ancestry when comparing with PaddleOCR.':e.id==='paddleocr'?'PaddlePaddle · CPU or CUDA. Configure one language/model per candidate.':e.id==='easyocr'?'PyTorch · CPU or CUDA. Compatible multilingual combinations depend on the model.':'Native Tesseract executable required, plus pytesseract. CPU baseline.'}</p><label>Python interpreter (leave blank to use app environment)<input data-env="${e.id}" value="${esc(envs[e.id]||'')}" placeholder="${esc(e.environment)}" spellcheck="false"></label><p>Create with <code>.\scripts\setup-engine.ps1 -Engine ${e.id} -Python C:\path\to\python.exe</code></p></section>`).join('');
+  $('environment-list').innerHTML=system.engines.map(e=>`<section class="panel environment-card"><h3>${names[e.id]} <span class="badge ${e.installed?'success':'warning'}">${e.installed?'Installed in app environment':'Optional environment'}</span></h3><p>${e.id==='rapidocr'?'ONNX Runtime · CPU or CUDA. Record model ancestry when comparing with PaddleOCR.':e.id==='paddleocr'?'PaddlePaddle · CPU or CUDA. Configure one language/model per candidate.':e.id==='easyocr'?'PyTorch · CPU or CUDA. Compatible multilingual combinations depend on the model.':'Native Tesseract executable required, plus pytesseract. CPU baseline.'}</p><label>Python interpreter (leave blank to use app environment)<input data-env="${e.id}" value="${esc(envs[e.id]||'')}" placeholder="${esc(e.environment)}" spellcheck="false"></label><p>Create with <code>python scripts/setup_engine.py --engine ${e.id} --python C:/Python312/python.exe</code></p></section>`).join('');
   system.engines.forEach(e=>{
     const input=document.querySelector(`[data-env="${e.id}"]`), label=input.parentElement, card=label.parentElement;
     label.firstChild.textContent='CPU / shared Python interpreter (blank uses automatic selection)';
@@ -305,7 +321,11 @@ function renderEnvironments(){
       const hint=document.createElement('p');hint.textContent=e.gpu_python_path?'Dedicated GPU environment detected. GPU runs select it automatically unless overridden.':'GPU runs require a CUDA-enabled runtime.';
       gpuLabel.insertAdjacentElement('afterend',hint);
     }
-    card.lastElementChild.innerHTML=`Create with <code>${esc(String.raw`.\scripts\setup-engine.ps1 -Engine ${e.id} -Python C:\path\to\python.exe`)}</code>${e.gpu?' (add <code>-Device gpu</code> for CUDA)':''}`;
+    card.lastElementChild.innerHTML=`Create with <code>${esc(String.raw`python scripts/setup_engine.py --engine ${e.id} --python C:/Python312/python.exe`)}</code>${e.gpu?' (add <code>--device gpu</code> for CUDA)':''}`;
+    if(e.id==='tesseract'){
+      const native=document.createElement('p');native.textContent=system.tesseract_command?`Native Tesseract detected: ${system.tesseract_command}`:'Native Tesseract is missing. Run python install.py to provision the complete runtime.';
+      card.append(native);
+    }
   });
   document.querySelectorAll('[data-env]').forEach(input=>input.onchange=()=>{envs[input.dataset.env]=input.value.trim();saveEnvs();renderEngines();toast('Interpreter path saved')});
 }
@@ -342,10 +362,11 @@ $('annotation-overlay').addEventListener('pointerdown',e=>{if(annotationJsonMode
 $('annotation-overlay').addEventListener('pointermove',e=>{if(!dragStart)return;const p=sourcePoint(e);let preview=$('drag-preview');if(!preview){preview=document.createElementNS('http://www.w3.org/2000/svg','rect');preview.id='drag-preview';preview.style.stroke='#f5d093';$('annotation-overlay').append(preview)}preview.setAttribute('x',Math.min(dragStart[0],p[0]));preview.setAttribute('y',Math.min(dragStart[1],p[1]));preview.setAttribute('width',Math.abs(p[0]-dragStart[0]));preview.setAttribute('height',Math.abs(p[1]-dragStart[1]))});
 $('annotation-overlay').addEventListener('pointerup',e=>{if(!dragStart)return;const p=sourcePoint(e);let [x,y]=dragStart;dragStart=null;const l=Math.round(Math.min(x,p[0])),t=Math.round(Math.min(y,p[1])),r=Math.round(Math.max(x,p[0])),b=Math.round(Math.max(y,p[1]));if(r-l<3||b-t<3){$('drag-preview')?.remove();return}pendingPolygon=[[l,t],[r,t],[r,b],[l,b]];$('new-region').classList.remove('hidden');$('new-region-text').value='';$('new-region-text').focus()});
 $('add-region').onclick=()=>{if(!pendingPolygon)return;annotationDraft.regions.push({text:$('new-region-text').value,polygon:pendingPolygon,language:$('languages').value.split(',')[0]||'en',ignore:false});pendingPolygon=null;$('new-region').classList.add('hidden');renderAnnotation()};
+$('terms-button').onclick=()=>$('terms-dialog').showModal();$('close-terms').onclick=()=>$('terms-dialog').close();
 $('save-annotation').onclick=async()=>{try{if(annotationJsonMode)annotationDraft=JSON.parse($('annotation-json').value);annotationDraft.reviewed=$('ann-reviewed').checked;annotationDraft.complete=$('ann-complete').checked;await api('/samples/'+sampleId+'/annotation',{method:'PUT',body:JSON.stringify(annotationDraft)});samples=await api('/samples');renderSamples();$('annotation-dialog').close();toast('Annotations saved. Start a new run to use this ground truth.')}catch(e){$('ann-error').textContent=e.message}};
 document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>showView(b.dataset.view));
 document.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
-document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{evidenceTab=b.dataset.tab;renderEvidence()});
+document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{evidenceTab=b.dataset.tab;renderEvidence();decorateTerms()});
 $('sample-select').onchange=e=>{if(currentRun?.config.mode==='live'){followLive=false;$('follow-live').checked=false}selectSample(e.target.value)};$('show-boxes').onchange=renderOverlay;$('fit-button').onclick=()=>highlightPrediction(-1);
 $('follow-live').onchange=e=>{followLive=e.target.checked;if(followLive)frameIndex=Math.max(0,(currentCandidate()?.records.length||0)-1);renderRun()};
 $('previous-camera-frame').onclick=()=>chooseCameraFrame(frameIndex-1);

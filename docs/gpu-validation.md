@@ -15,7 +15,7 @@ Dashboard run `73fca09632b5` also completed all five frames with zero failures a
 Provision on another compatible Windows machine with:
 
 ```powershell
-.\scripts\setup-engine.ps1 -Engine rapidocr -Device gpu -Python C:\Python312\python.exe
+python scripts/setup_engine.py --engine rapidocr --device gpu --python C:/Python312/python.exe
 .\.venv\Scripts\python.exe -m ocrbench run configs/rapidocr-gpu.json
 ```
 

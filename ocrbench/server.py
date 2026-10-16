@@ -17,6 +17,8 @@ from .schema import RunConfig, Annotation
 from .storage import ROOT, DATA, sample_list, sample_path, get_annotation, save_json, read_json, clear_camera_session
 from .runner import manager
 from .environments import discovered_interpreter
+from .terms import glossary, glossary_html
+from .native import tesseract_command
 
 @asynccontextmanager
 async def lifespan(app):
@@ -54,7 +56,13 @@ def system():
                         "python_path": str(isolated / "Scripts" / "python.exe") if isolated_installed else None,
                         "gpu_python_path": discovered_interpreter(name, "gpu"),
                         "gpu": name != "tesseract", "environment": str(isolated / "Scripts" / "python.exe")})
-    return {"engines": engines, "interpreter": sys.executable, "active_run": manager.active, "data_directory": str(DATA)}
+    return {"engines": engines, "interpreter": sys.executable, "active_run": manager.active, "data_directory": str(DATA),
+            "tesseract_command": tesseract_command()}
+
+
+@app.get('/api/glossary')
+def metric_terms():
+    return glossary()
 
 
 @app.get("/api/samples")
@@ -187,7 +195,7 @@ def export(run_id: str, format: str):
             for r in c["records"]:
                 sections.append(f"<details><summary>{html.escape(r['frame_id'])} · {html.escape(r['status'])}</summary><pre>{html.escape(json.dumps(r, ensure_ascii=False, indent=2))}</pre></details>")
         content = "<!doctype html><meta charset='utf-8'><title>OCR benchmark report</title><style>body{font:15px system-ui;max-width:1000px;margin:48px auto;color:#17252a}pre{white-space:pre-wrap;background:#f3f5f5;padding:20px}summary{padding:12px;cursor:pointer}</style>"
-        content += f"<h1>Automotive OCR benchmark</h1><p>Run {run_id} · {html.escape(value['created_at'])}</p><p>Strict Unicode scoring. Unreviewed or partial annotations have no full-image accuracy score. Repetitions do not add independent scene diversity. No automatic engine winner.</p>"+"".join(sections)
+        content += f"<h1>Automotive OCR benchmark</h1><p>Run {run_id} · {html.escape(value['created_at'])}</p><p>Strict Unicode scoring. Unreviewed or partial annotations have no full-image accuracy score. Repetitions do not add independent scene diversity. No automatic engine winner.</p>"+glossary_html()+"".join(sections)
         return Response(content, media_type="text/html", headers=headers)
     raise HTTPException(404, "Supported exports: json, jsonl, csv, html")
 
