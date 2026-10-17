@@ -1,87 +1,121 @@
-# Install from internal Artifactory, without micromamba
+# OCR Bench installation
 
-Use Windows x64 and Python 3.12. All package installations now use your pip configuration. Setup contains no public PyTorch/Paddle index overrides and does not use micromamba, Conda, shell activation, or a system Tesseract installer.
-
-When run using an existing virtual environment's Python, `install.py` installs the app and CPU OCR requirements into that environment, even if the project already has a `.venv`. It does not create an additional project `.venv`. This also works when invoking the environment's Python directly without activation. `start.py` uses the same running environment; run it with that environment's Python too. Outside a virtual environment, setup creates or reuses the project's `.venv`, and the launcher uses it. The `--python` option selects the Python used to create environments; it does not replace the running app venv. The Python 3.12 / 64-bit requirement still applies.
-
-GPU framework builds continue to use separate `.engines/<engine>-gpu` environments to avoid conflicting CPU/GPU dependencies. Use `--device cpu` to install only into the current app environment.
-
-## If corporate pip is already configured
-
-Place an approved `eng.traineddata` in a local model folder, then run:
+Use Windows x64 and Python 3.12. Run:
 
 ```text
-python install.py --tessdata-path "C:/OrgModels/tessdata"
+python install.py
+```
+
+Setup opens a local browser installer built with Python's standard library. Choose a sidebar page:
+
+- **Components**: select CPU components, GPU engines, Tesseract, or Modify/Uninstall when an actual app registration exists.
+- **Package source**: optionally provide an Artifactory simple-index URL, access token, username and CA certificate.
+- **Environment**: review the target venv and choose the Python used for additional environments.
+
+The installer appears as a modern card over an Ubuntu-inspired background. Logs are collapsed initially. Choose **Details** to expand them, then drag their top divider or use its arrow-key controls to resize. The remembered height does not automatically reopen the logs.
+
+## Package configuration
+
+Provide **both** the HTTPS Artifactory PyPI simple-index URL and token. Setup writes the authenticated, percent-encoded index URL to the user pip configuration before running normal pip commands:
+
+- Windows: `%APPDATA%/pip/pip.ini`.
+- Linux: `$XDG_CONFIG_HOME/pip/pip.conf`, or `~/.config/pip/pip.conf`.
+- macOS: the existing `~/Library/Application Support/pip/pip.conf` location, otherwise `~/.config/pip/pip.conf`.
+
+Enter an Artifactory username when the repository requires username plus token-as-password. Leave the username blank if the repository accepts the token as its username.
+
+**The token is stored as plain text in pip.ini.** The installer keeps it out of its command arguments and redacts it from the displayed log. The browser does not receive saved credentials back from the file. The URL, token and username form fields are cleared after setup accepts them; later pip invocations can use the saved configuration.
+
+Unrelated existing INI settings are preserved. The selected index is saved in both `[global]` and `[install]`; extra indexes and find-links in those sections are cleared. A supplied CA bundle is also saved. The update is atomic; malformed existing INI files are not overwritten. Certificate verification remains enabled.
+
+If **both URL and token are blank**, setup leaves the pip configuration unchanged and runs pip normally. With no pre-existing package-source settings, pip uses PyPI. If an Artifactory source was saved previously, blank fields reuse that configuration rather than deleting it. One field without the other is rejected.
+
+Pip's normal precedence remains in effect: environment variables and per-venv settings can override the user INI file. Setup identifies relevant environment-variable names without printing their values. It does not use a temporary PIP_INDEX_URL or disable pip config files.
+
+For a personal PC using plain public PyPI, setup automatically adds the official [Paddle CUDA 13 index](https://www.paddlepaddle.org.cn/packages/stable/cu130/) for Paddle GPU and the official [PyTorch CUDA 13 index](https://download.pytorch.org/whl/cu130) for EasyOCR's GPU framework. These apply only to the framework installation commands; pip.ini is unchanged. The effective settings are checked separately inside each target venv, including environment and site configuration. A custom index, extra index, find-links or no-index setting disables this automatic supplementation. Artifactory installations use their configured sources exclusively and must mirror the selected CUDA wheels and dependencies; failed private installations do not fall back to public sources.
+
+References: [pip configuration](https://pip.pypa.io/en/stable/topics/configuration/), [pip authentication](https://pip.pypa.io/en/stable/topics/authentication/).
+
+## Command-line installation
+
+Any command-line arguments run the CLI instead of the UI. To configure Artifactory, supply the URL and enter the token at the secure terminal prompt:
+
+```text
+python install.py --index-url "https://artifactory.example.com/artifactory/api/pypi/python-virtual/simple" --without-tesseract --device cpu
+```
+
+Noninteractive callers may provide `OCRBENCH_INDEX_TOKEN` and optional `OCRBENCH_INDEX_USERNAME` in the process environment. Keep tokens out of shell history.
+
+To use normal saved pip settings:
+
+```text
+python install.py --without-tesseract --device cpu
 python start.py
 ```
 
-The default Tesseract backend is now **tesserocr**. Its approved Windows wheel contains the native Tesseract libraries; no `tesseract.exe` is needed. Setup validates the model and library and records the choice in `.engines/native-tools.json`. Restart a running app after changing that choice.
-
-## Specify one internal package source explicitly
-
-Replace the example URL with your IT-provided **PyPI simple-index** URL:
+For all engines on a personal Windows PC, including native Tesseract:
 
 ```text
-python install.py --index-url "https://artifactory.example.com/artifactory/api/pypi/python-virtual/simple" --tessdata-path "C:/OrgModels/tessdata"
+python install.py --auto-install-tesseract --device auto
 ```
 
-With `--index-url`, setup uses only that index: it ignores inherited pip configuration files and removes extra-index/find-links environment settings for its child processes. This prevents a configured public fallback. The URL is held in the child-process environment, not saved in project files or printed by the installer's command logger.
+Use `--cert "C:/OrgCertificates/corporate-ca.pem"` to save a corporate CA bundle.
 
-For a corporate CA bundle:
+## Environments and launch
+
+When run with an existing venv's Python, app requirements are installed into that venv. No additional project .venv is created. Direct invocation of the venv's Python works without shell activation. Outside a venv, setup creates or reuses the project's .venv. The `--python` option selects the interpreter used to create additional environments; it does not replace the running app venv.
+
+GPU environments remain separate under .engines/<engine>-gpu to avoid CPU/GPU dependency conflicts. All pip invocations read the normal configuration, including the saved Artifactory settings.
+
+**Start Workbench** runs start.py using the installer's Python and environment. After the server is ready, choose **Open Workbench**. An occupied port 8765 is handled by choosing another local port. **Stop Workbench** stops an instance launched by this installer. Closing the installer leaves the workbench running.
+
+## Modify, uninstall and detection
+
+Existing installations are detected from the target environment's actual site-packages registration, not source-tree egg-info. Detection is refreshed on page reload and periodically so an external uninstall is reflected.
+
+Modify/Repair installs or repairs selected components. Unchecking a component retains existing shared libraries.
+
+Uninstall removes the OCR Bench app registration from the selected environment. Shared frameworks, virtual environments, the source checkout, models and run history are retained. It runs pip from a neutral temporary directory with isolated Python startup to avoid local editable metadata shadowing the installed distribution. Setup verifies registration removal and reports an error if it remains; a zero pip exit code alone is insufficient.
 
 ```text
-python install.py --index-url "https://artifactory.example.com/artifactory/api/pypi/python-virtual/simple" --cert "C:/OrgCertificates/corporate-ca.pem" --tessdata-path "C:/OrgModels/tessdata"
+python install.py --engines rapidocr,easyocr --without-tesseract --device cpu
+python install.py --uninstall
 ```
 
-`--cert` sets pip's CA bundle while preserving certificate verification. Because explicit-index mode ignores pip configuration files, supply the CA with `--cert` or `PIP_CERT` if it was previously configured only in pip.ini. Use your organisation's approved keyring/netrc authentication, or existing pip authentication without the explicit-index flag. Do not put credentials in this checkout or send them in chat. `PIP_KEYRING_PROVIDER` and certificate-related environment settings are inherited.
+## Packages and models
 
-## Persistent pip configuration instead
-
-IT can configure `%APPDATA%/pip/pip.ini` on Windows. A credential-free example is in `config/pip.ini.example`. An organisation-managed configuration takes precedence over this example; use IT's settings. The installer honours existing pip settings when `--index-url` is omitted. Environment variables can override pip.ini, so check that extra package sources are not configured if all packages must come from one feed.
-
-## Required repository contents
-
-Mirror the application's normal dependencies and build dependencies (`setuptools`, pip), plus:
+Every selected package and its build/transitive dependencies must exist in the effective pip source. Authentication does not supply missing artifacts.
 
 | Component | Required package/build |
 |---|---|
-| RapidOCR CPU | `rapidocr>=3.10,<4`, `onnxruntime>=1.20,<2` |
-| PaddleOCR CPU | `paddleocr>=3,<4`, `paddlepaddle>=3,<4`, their PaddleX dependencies |
-| EasyOCR CPU | `easyocr>=1.7,<2`, `torch==2.14.1+cpu`, `torchvision==0.29.1+cpu` |
-| Tesseract wheel | `tesserocr==2.10.0`, CPython 3.12 / Windows x64 wheel bundling Tesseract 5.5.2 and its DLLs |
-| Legacy executable wrapper | `pytesseract>=0.3.13` remains available for existing approved native installations |
-| RapidOCR GPU | `onnxruntime-gpu[cuda,cudnn]==1.31.0` plus its NVIDIA runtime dependencies |
-| EasyOCR GPU | `torch==2.14.1+cu130`, `torchvision==0.29.1+cu130` |
-| PaddleOCR GPU | `paddlepaddle-gpu==3.3.1`, **the tested CUDA 13 Windows wheel**, plus its NVIDIA dependencies |
+| RapidOCR CPU | rapidocr>=3.10,<4 and onnxruntime>=1.20,<2 |
+| PaddleOCR CPU | paddleocr>=3,<4, paddlepaddle>=3,<4 and PaddleX dependencies |
+| EasyOCR CPU | easyocr>=1.7,<2, torch==2.14.1 and torchvision==0.29.1 |
+| Tesseract bundled wheel | Approved tesserocr==2.10.0, CPython 3.12 / Windows x64 wheel with bundled native libraries |
+| Installed Tesseract | pytesseract plus an existing approved tesseract.exe |
+| Auto install (personal PC) | Native Windows Tesseract and English data via WinGet, with the pytesseract wrapper |
+| RapidOCR GPU | onnxruntime-gpu[cuda,cudnn]==1.31.0 and NVIDIA dependencies |
+| EasyOCR GPU | torch==2.14.1+cu130 and torchvision==0.29.1+cu130 |
+| PaddleOCR GPU | paddlepaddle-gpu==3.3.1, the tested Windows CUDA build and dependencies |
 
-The approved tesserocr wheel must be mirrored into Artifactory; ordinary public PyPI does not provide the Windows build used here. Match Python version, architecture, and the bundled native library version. Setup requires a binary wheel for tesserocr and will not attempt a source build.
-
-`--device cpu` installs CPU components only. The default `--device auto` also installs three isolated GPU environments when NVIDIA hardware is detected. `--device gpu` explicitly requests those environments. GPU frameworks remain separate from CPU builds. Runtime preflight continues to reject silent CPU fallback.
-
-`requirements.txt` installs the CPU frameworks and Python wrappers. `requirements-tesserocr.txt` adds the bundled Tesseract wheel. Both contain package specifications only and inherit the chosen feed. For Python packages only, after corporate pip configuration:
-
-```text
-python -m pip install -r requirements-tesserocr.txt
-```
-
-Use `install.py` to create environments and validate/persist model settings.
-
-## Models and offline operation
-
-`eng.traineddata` is a **model asset**, not supplied by the Windows tesserocr wheel. Have IT stage it from the internal artifact store, or package the model internally and pass its extracted directory. Setup does not download it from GitHub or another public host. The folder must contain `eng.traineddata`, not another nested tessdata folder.
-
-The other OCR engines also use model weights, which are not necessarily included in Python wheels. Stage approved weights before offline use: EasyOCR supports `model_storage_directory` and `download_enabled: false`; PaddleOCR supports explicit model directories; RapidOCR supports explicit detector/classifier/recognizer model paths. Existing caches can be reused. An internal pip index configures Python package installation, not framework-specific model download URLs.
-
-## Backend identity and legacy support
-
-The tesserocr backend reuses the Tesseract API inside the worker and produces text-line polygons and confidence. The legacy pytesseract backend starts the native executable for each request. Runs record the wrapper, native version, execution mode, model hashes, and options; compare matching backends when interpreting latency changes.
-
-Tesserocr accepts `options.psm` (default 11), `options.oem` (default 3), `options.variables`, and `options.tessdata_dir`. It rejects legacy CLI `options.config` rather than silently ignoring it. English `en` is mapped to `eng`. Tesseract remains CPU-only.
-
-To keep an existing approved executable instead:
+Public-version CPU torch pins accept matching installed +cpu builds. The bundled tesserocr Windows wheel must be provided by the selected source; ordinary public PyPI does not provide the approved Windows wheel used here. To use installed Tesseract instead:
 
 ```text
 python install.py --tesseract-backend pytesseract --tesseract-path "C:/Approved Tools/Tesseract-OCR/tesseract.exe"
 ```
 
-References: [pip configuration](https://pip.pypa.io/en/stable/topics/configuration/), [pip authentication](https://pip.pypa.io/en/stable/topics/authentication/), [tesserocr API](https://github.com/sirfz/tesserocr), [Windows wheel packaging](https://github.com/simonflueckiger/tesserocr-windows_build).
+Tesseract's eng.traineddata is a separate model asset. Supply its containing folder with --tessdata-path, or stage it in data/models/tesseract/tessdata. Other engines also need approved model weights. Pip configuration controls package installation, not framework model-download hosts. Stage models/caches before offline use; EasyOCR supports download_enabled:false and model_storage_directory. PaddleOCR and RapidOCR accept explicit model paths.
+
+**Auto install (personal PC)** explicitly enables a public native download on Windows through WinGet (`UB-Mannheim.TesseractOCR`). Windows App Installer must be installed; Windows may display an administrator prompt. An existing native installation is reused and verified. Setup checks the executable and English language data and saves the paths for the workbench, without requiring PATH refresh or the unavailable tesserocr wheel. This option hides and ignores existing executable/model form fields and uses the native install's English data. It is separate from pip/Artifactory; on a restricted work PC, use Installed Tesseract or the approved bundled wheel instead. OCR Bench uninstall retains the native Tesseract installation.
+
+## GPU selection and partial results
+
+Choose GPU engines independently from CPU components. For all CPU components plus RapidOCR GPU:
+
+```text
+python install.py --without-tesseract --device gpu --gpu-engines rapidocr
+```
+
+If one GPU setup fails, remaining selected GPU engines are still attempted. CPU and successful GPU setups are kept; the UI reports **Partially complete** and the CLI exits nonzero. GPU benchmark preflight still requires actual CUDA support.
+
+Paddle GPU 2.6.x cannot satisfy this app's tested 3.3.1 requirement. Supply the correct Windows / Python 3.12 CUDA wheel in the effective repository or deselect PaddleOCR GPU while keeping PaddleOCR CPU. The installer does not silently downgrade or route a GPU request to CPU.

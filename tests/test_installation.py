@@ -22,6 +22,7 @@ def test_gpu_framework_installed_before_ocr_extra(monkeypatch, tmp_path, engine,
     monkeypatch.setattr(installer, 'ROOT', tmp_path)
     monkeypatch.setattr(installer, 'environment', lambda directory, python: target)
     monkeypatch.setattr(installer, 'pip_install', lambda python, *args: calls.append((python, args)))
+    monkeypatch.setattr(installer, 'uses_public_pypi', lambda python: False)
     installer.setup_engine(engine, 'gpu', 'python312')
     assert calls[0][0] == target and framework in calls[0][1]
     assert calls[-1][1] == ('-e', f'{tmp_path}[{engine}-gpu]')
@@ -39,6 +40,9 @@ def test_managed_tesseract_discovered_without_system_path(monkeypatch, tmp_path)
     monkeypatch.setattr(native, 'ROOT', tmp_path)
     monkeypatch.setattr(native.shutil, 'which', lambda name: None)
     monkeypatch.delenv('OCRBENCH_TESSERACT', raising=False)
+    # Keep discovery independent of a real native install on the test host.
+    for variable in ('ProgramFiles', 'LOCALAPPDATA'):
+        monkeypatch.delenv(variable, raising=False)
     target = tmp_path/'.engines/tesseract-native/Library/bin/tesseract.exe'
     target.parent.mkdir(parents=True)
     target.touch()

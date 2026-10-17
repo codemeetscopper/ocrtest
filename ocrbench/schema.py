@@ -4,6 +4,17 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator, field_validator
 
 
+class HistoryExportRow(BaseModel):
+    model_config = {'extra': 'forbid'}
+    run_id: str = Field(pattern=r'^[0-9a-f]{12}$')
+    candidate_index: int = Field(ge=0)
+
+
+class HistoryExportSelection(BaseModel):
+    model_config = {'extra': 'forbid'}
+    rows: list[HistoryExportRow] | None = None
+
+
 class Region(BaseModel):
     text: str = ""
     polygon: list[tuple[float, float]]

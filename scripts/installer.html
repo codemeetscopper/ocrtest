@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>OCR Bench · Install</title><style>
+  :root {color-scheme:light; font:14px/1.5 Ubuntu,"Segoe UI",system-ui,sans-serif; color:#2c2c2c; background:#351329; --orange:#e95420; --log-height:210px}
+  * {box-sizing:border-box} body {margin:0;padding:0;height:100dvh;overflow:hidden;background:#fafafa}
+  button,input,select {font:inherit} button,a,input,select,summary,[role=separator] {touch-action:manipulation}
+  button:focus-visible,a:focus-visible,input:focus,select:focus,summary:focus-visible,[role=separator]:focus-visible {outline:3px solid #f5a381; outline-offset:2px}
+  .installer-shell {height:100%;width:100%;background:#fafafa;border:0;border-radius:0;box-shadow:none;overflow:hidden;display:grid;grid-template-rows:43px minmax(120px,1fr) auto 10px var(--log-height)}
+  .titlebar {background:#302e2d; color:#eee; display:flex; align-items:center; justify-content:space-between; padding:0 16px; font-size:12px; font-weight:600}
+  .window-controls {display:flex; align-items:center; gap:8px} .window-controls span {width:10px;height:10px; border-radius:50%;background:#6b6663} .window-controls span:last-child {background:var(--orange)}
+  .workspace {display:grid;grid-template-columns:205px minmax(0,1fr); min-height:0}
+  aside {background:#f0efed;padding:28px 22px;display:flex;flex-direction:column}
+  .brand-icon {display:flex;align-items:center;justify-content:center;width:44px;height:44px;background:var(--orange);color:white;border-radius:11px;font-size:12px;font-weight:750;letter-spacing:1px;box-shadow:0 3px 8px #b0391520}
+  .brand-title {font-size:20px; font-weight:600; letter-spacing:-.4px;margin:13px 0 2px} .brand-subtitle {font-size:12px;color:#77716b}
+  nav {display:grid;gap:7px;margin-top:30px} nav a {padding:9px 10px;color:#625c57;border-radius:5px;text-decoration:none;font-size:13px} nav a[aria-current=step] {background:#e9542014;color:#b63b10;font-weight:650} nav a:hover {background:#e5e1dd}
+  nav span {margin-right:8px;color:#9b9188;font-size:11px} .sidebar-foot {margin-top:auto;padding-top:24px;color:#8c837c;font-size:11px}
+  .content {min-width:0;overflow:auto;padding:28px 36px;scroll-behavior:auto}
+  h1 {font-size:27px;line-height:1.2;letter-spacing:-.7px;font-weight:500;margin:0 0 7px} h2 {font-size:15px;margin:0;font-weight:600} p {margin:0;color:#77716b;font-size:13px}
+  .environment {background:#f3f0ed;border:1px solid #e5ded8;border-left:3px solid var(--orange);border-radius:5px;padding:11px 14px;margin:20px 0}
+  .environment strong {display:block;font-size:12px;font-weight:600} code {font:11px/1.5 Consolas,monospace;overflow-wrap:anywhere}
+  small {display:block;font-size:11px;color:#81786f;margin-top:4px;line-height:1.5}
+  fieldset {border:0;padding:0;margin:0;min-width:0}
+  .field-grid {display:grid;grid-template-columns:1fr 1fr;gap:0 20px}
+  label {display:block;font-size:12px;font-weight:600;margin:16px 0 6px}
+  input,select {color:#333;background:#fff;border:1px solid #bdb7b1;border-radius:5px;padding:9px 10px;width:100%;min-width:0;font-size:12px}
+  input:disabled,select:disabled {background:#eeeae5}
+  .note {font-size:11px;color:#766e65;border-left:2px solid #c8bdb1;padding:7px 11px;margin:15px 0 3px}
+  details {border-top:1px solid #e2ddd8;margin-top:20px;padding-top:15px} summary {cursor:pointer;font-size:12px;font-weight:600}
+  .success {background:#edf6ed;border:1px solid #b5d5b6;color:#315c32;border-radius:5px;padding:10px 12px;font-size:12px;margin-bottom:14px}
+  .success.partial {background:#fff5df;border-color:#e7cb91;color:#7c5520}
+  .maintenance {background:#f1eeea;padding:13px 15px;border-radius:8px;margin:17px 0}.maintenance small{margin:0 0 9px}.mode-choices,.components{display:flex;gap:12px;flex-wrap:wrap}.mode-choices label,.components label{display:flex;align-items:center;gap:7px;margin:5px 0;font-weight:500}.mode-choices input,.components input{width:auto;accent-color:var(--orange)}.components{margin:10px 0 2px;gap:8px 20px}.component-version{font-size:10px;color:#857c72}.uninstall-note{background:#fff0eb;color:#8c3619;border-radius:7px;padding:14px;font-size:12px}button.danger{background:#b13627;color:white;border-color:#b13627}
+  .actions {display:flex;align-items:center;justify-content:space-between;gap:14px;border-top:1px solid #dcd6d0;background:#f5f3f0;padding:13px 22px;min-height:64px}
+  .buttons {display:flex;align-items:center;gap:9px;flex-shrink:0}
+  button,.open-link {padding:9px 16px;border:1px solid #bcb5ae;border-radius:5px;font-size:12px;font-weight:600;background:#fff;color:#3b3631;cursor:pointer;text-decoration:none;white-space:nowrap}
+  button.primary {border-color:#c74314;background:var(--orange);color:#fff} button.primary:hover {background:#d74717}
+  button:disabled {opacity:.5;cursor:default} #message {font-size:12px;color:#74695f;overflow-wrap:anywhere} #message[data-error=true] {color:#ae302f}
+  #log-resize {cursor:ns-resize;touch-action:none;background:#e6e1db;display:flex;align-items:center;justify-content:center;border-top:1px solid #d4cbc2;border-bottom:1px solid #392e36;user-select:none}
+  #log-resize::after {content:"";width:38px;height:3px;background:#a69c92;border-radius:4px}
+  #log-resize:hover,#log-resize:focus-visible {background:#edc8b4}
+  .log-panel {min-height:0;background:#21131f;color:#e6dce4;display:grid;grid-template-rows:34px minmax(0,1fr)}
+  .log-head {display:flex;justify-content:space-between;align-items:center;gap:10px;background:#2e202b;padding:0 17px;border-bottom:1px solid #ffffff0c}
+  .log-head h2 {font-size:11px;font-weight:500} .log-meta {display:flex;align-items:center;gap:12px;font-size:10px;color:#bbaabc}
+  #state[data-state=succeeded],#app-state[data-state=running] {color:#b0dfaa} #state[data-state=failed],#app-state[data-state=failed] {color:#ffa59c}
+  pre {white-space:pre-wrap;overflow-wrap:anywhere;overflow:auto;padding:12px 18px;font:11px/1.65 Consolas,monospace;margin:0;min-height:0}
+  [hidden] {display:none!important}
+  @media(max-width:760px) {.workspace{grid-template-columns:150px minmax(0,1fr)}aside{padding:22px 13px}.content{padding:23px 22px}.field-grid{grid-template-columns:1fr}.brand-title{font-size:18px}.actions{padding:12px 16px}}
+  @media(max-width:580px) {body{padding:0}.installer-shell{border:0;border-radius:0}.workspace{grid-template-columns:1fr}aside{display:none}.content{padding:22px 20px}h1{font-size:24px}.actions{align-items:start;flex-direction:column;gap:8px}.buttons{width:100%;justify-content:flex-end;flex-wrap:wrap}.log-meta .resize-hint{display:none}}
+
+  body {padding:28px;display:grid;place-items:center;background:radial-gradient(ellipse at 85% 15%,#b94248a0,transparent 55%),radial-gradient(ellipse at 10% 90%,#79255f,transparent 65%),linear-gradient(135deg,#24112f,#53203f)}
+  .installer-shell {width:100%;height:100%;max-width:1220px;max-height:900px;border:0;border-radius:16px;box-shadow:0 24px 75px #16071d80;grid-template-rows:43px minmax(0,1fr) auto 0 0}
+  .installer-shell.logs-open {grid-template-rows:43px minmax(0,1fr) auto 10px var(--log-height)}
+  .content {min-height:0;padding:32px 38px}
+  .step-panel {max-width:850px;margin:auto}
+  .step-intro {margin:6px 0 22px}
+  .statusline {display:flex;align-items:center;gap:10px;min-width:120px;flex:1}
+  .actions {flex-wrap:wrap}
+  .details-button {border:0;background:transparent;padding:7px 8px;color:#725d6f}
+  .source-note {margin:12px 0 18px;background:#f2eeea;padding:12px 14px;border-radius:8px;font-size:12px;color:#695d54}
+  .page-heading {font-weight:500}
+  @media(max-width:760px) {body{padding:16px}.content{padding:24px}.workspace{grid-template-columns:145px minmax(0,1fr)}}
+  @media(max-width:580px) {body{padding:10px}.installer-shell{border-radius:13px}.workspace{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr)}aside{display:block;padding:9px 12px}.brand-icon,.brand-title,.brand-subtitle,.sidebar-foot{display:none}nav{display:flex;margin:0;gap:4px}nav a{flex:1;padding:7px 6px;font-size:11px}nav span{display:none}.content{padding:20px}.actions{padding:10px 14px}.buttons{justify-content:flex-end}.statusline{width:100%}}
+</style></head><body><main class="installer-shell" id="installer">
+  <header class="titlebar"><span>OCR Bench Installer</span><div class="window-controls" aria-hidden="true"><span></span><span></span><span></span></div></header>
+  <div class="workspace">
+    <aside aria-label="Installer sections"><div class="brand-icon" aria-hidden="true">OCR</div><div class="brand-title">OCR Bench</div><div class="brand-subtitle">Workbench setup</div>
+      <nav><a href="#components" data-section="components" aria-current="step"><span>01</span>Components</a><a href="#packages" data-section="packages"><span>02</span>Package source</a><a href="#environment" data-section="environment"><span>03</span>Environment</a></nav>
+      <div class="sidebar-foot">Your environment.<br>Your approved packages.<br>Everything runs locally.</div>
+    </aside>
+    <div class="content">
+      <div class="success" id="success" hidden></div>
+      <form id="form" novalidate>
+        <section class="step-panel" id="components" data-page="components">
+          <h1>Set up OCR Bench</h1><p class="step-intro">Choose the OCR components for your workbench.</p>
+          <div class="maintenance" id="maintenance" hidden><h2>Existing installation found</h2><small id="installed-version"></small><div class="mode-choices" role="group" aria-label="Manage installation"><label><input type="radio" name="action" value="modify" checked>Modify / repair</label><label><input type="radio" name="action" value="uninstall">Uninstall</label></div></div>
+          <div class="uninstall-note" id="uninstall-note" hidden>Removes the OCR Bench app registration from the selected Python environment. Shared OCR libraries, environments, source files, models and run history are kept. Close other workbench instances first.</div>
+          <fieldset id="options"><h2>Installation options</h2>
+          <div class="components" role="group" aria-label="OCR components"><label><input type="checkbox" name="component" value="rapidocr" checked>RapidOCR <span class="component-version" id="rapidocr-version"></span></label><label><input type="checkbox" name="component" value="paddleocr" checked>PaddleOCR <span class="component-version" id="paddleocr-version"></span></label><label><input type="checkbox" name="component" value="easyocr" checked>EasyOCR <span class="component-version" id="easyocr-version"></span></label></div><small>Select components to install or repair. Existing unchecked libraries are kept.</small>
+          <div class="field-grid">
+            <div><label for="device">Processing support</label><select id="device" name="device"><option value="cpu">CPU</option><option value="auto">CPU + GPU if NVIDIA is detected</option><option value="gpu">CPU + GPU environments</option></select><small>GPU components use separate environments and need approved CUDA packages.</small></div>
+            <div><label for="backend">Tesseract</label><select id="backend" name="backend"><option value="auto">Auto install (personal PC)</option><option value="pytesseract">Installed Tesseract (pytesseract)</option><option value="tesserocr">Bundled Tesseract (tesserocr)</option><option value="skip">Skip Tesseract</option></select></div>
+          </div>
+          <div id="gpu-fields" hidden><label>GPU engines</label><div class="components" role="group" aria-label="GPU engines"><label><input type="checkbox" name="gpu_component" value="rapidocr" checked>RapidOCR GPU</label><label><input type="checkbox" name="gpu_component" value="paddleocr" checked>PaddleOCR GPU</label><label><input type="checkbox" name="gpu_component" value="easyocr" checked>EasyOCR GPU</label></div><small>On public PyPI, CUDA builds come from the official Paddle and PyTorch indexes automatically. With Artifactory or another configured feed, all Python packages use that feed; it must include the required CUDA builds.</small></div>
+          <div class="note" id="gpu-results" role="status" aria-live="polite" hidden></div>
+          <div id="native-fields"><label for="tesseract_path">Tesseract executable</label><input id="tesseract_path" name="tesseract_path" placeholder="C:/Program Files/Tesseract-OCR/tesseract.exe"><small>Leave blank to use the saved or detected installation.</small></div>
+          <div id="data-fields"><label for="tessdata_path">Language model folder</label><input id="tessdata_path" name="tessdata_path" placeholder="C:/OrgModels/tessdata"><small>The folder containing eng.traineddata. An existing detected folder can be reused.</small></div>
+          <div class="note" id="backend-note"></div>
+
+          </fieldset>
+        </section>
+        <section class="step-panel" id="packages" data-page="packages" hidden>
+          <h1>Package source</h1><p class="step-intro">Configure Artifactory once, then let pip handle package installation.</p>
+          <fieldset id="package-options">
+            <div class="source-note">Personal PC: leave both blank to use PyPI, with official vendor indexes for CUDA builds. Work PC: provide the Artifactory URL and token to save them to user pip.ini. An existing pip source is preserved and used without public fallback.</div>
+            <label for="index_url">Artifactory pip simple-index URL</label><input type="url" id="index_url" name="index_url" placeholder="https://artifactory.example.com/artifactory/api/pypi/python-virtual/simple">
+            <label for="access_token">Artifactory access token</label><input type="password" id="access_token" name="access_token" autocomplete="off" spellcheck="false"><small>The token will be stored in plain text in your user pip.ini when you install. It is kept out of installer logs and command arguments.</small>
+            <label for="token_user">Artifactory username (optional)</label><input id="token_user" name="token_user" autocomplete="off" placeholder="Your Artifactory username"><small>Leave blank if your repository accepts the token as its username.</small>
+            <label for="cert">Corporate CA certificate (optional)</label><input id="cert" name="cert" placeholder="C:/OrgCertificates/corporate-ca.pem"><small>Saved in pip.ini if supplied. Normal certificate verification remains enabled.</small>
+            <div class="note">User pip configuration:<br><code id="pip-config-path"></code><br>Blank fields leave saved pip settings unchanged. Pip environment variables and per-venv configuration keep their normal precedence.</div>
+          </fieldset>
+        </section>
+        <section class="step-panel" id="environment" data-page="environment" hidden>
+          <h1>Python environment</h1><p class="step-intro">Review where OCR Bench will be installed and started.</p>
+          <div class="environment"><strong id="environment-title">Checking Python environment…</strong><code id="target"></code><small id="environment-help"></small></div>
+          <p id="environment-installation"></p>
+          <fieldset id="environment-options"><label for="python">Python for creating environments</label><input id="python" name="python"><small>64-bit Python 3.12. App requirements use the running venv when one is active. This path is used when additional environments must be created.</small></fieldset>
+        </section>
+      </form>
+    </div>
+  </div>
+  <footer class="actions"><div class="statusline"><button class="details-button" type="button" id="details" aria-expanded="false" aria-controls="log-panel">Details</button><span id="message" role="status" aria-live="polite">Connecting…</span></div><div class="buttons"><button id="install" form="form" type="submit" disabled>Install components</button><button class="primary" id="start" type="button" disabled>Start Workbench</button><a class="open-link" id="open-workbench" target="_blank" rel="noopener" hidden>Open Workbench ↗</a></div></footer>
+  <div id="log-resize" role="separator" tabindex="0" aria-label="Resize installation log" aria-orientation="horizontal" aria-valuemin="100" aria-valuemax="500" aria-valuenow="210" title="Drag to resize logs, or use the Up and Down arrow keys" hidden></div>
+  <section class="log-panel" id="log-panel" aria-label="Installation progress" hidden><div class="log-head"><h2>Installation output</h2><div class="log-meta"><span class="resize-hint">Drag top edge to resize</span><span id="app-state" role="status" aria-live="polite"></span><span id="state" role="status" aria-live="polite">Ready</span></div></div><pre id="output" tabindex="0" aria-label="Installation log">Your installation log will appear here.</pre></section>
+</main><script>
+  const $ = id => document.getElementById(id);
+  let token = '', running = false, appState = 'idle', launchPending = false, installed = false, operation = 'install';
+  const content = document.querySelector('.content');
+  let currentPage = 'components';
+  function activeSection(section) {
+    if (!['components','packages','environment'].includes(section)) section = 'components';
+    currentPage = section;
+    for (const link of document.querySelectorAll('nav [data-section]')) {
+      if (link.dataset.section === section) link.setAttribute('aria-current','step');
+      else link.removeAttribute('aria-current');
+    }
+    for (const page of document.querySelectorAll('[data-page]')) page.hidden = page.dataset.page !== section;
+    content.scrollTop = 0;
+    history.replaceState(null,'','#'+section);
+  }
+  for (const link of document.querySelectorAll('nav [data-section]')) link.addEventListener('click', event => {
+    event.preventDefault(); activeSection(link.dataset.section);
+  });
+  window.addEventListener('hashchange', () => activeSection(location.hash.slice(1)));
+  function selectedAction() {return installed ? document.querySelector('input[name=action]:checked').value : 'install';}
+  function modeFields() {
+    const action = selectedAction();
+    $('options').hidden = action === 'uninstall';
+    $('options').disabled = running || action === 'uninstall';
+    $('package-options').disabled = running || action === 'uninstall';
+    $('environment-options').disabled = running || action === 'uninstall';
+    $('uninstall-note').hidden = action !== 'uninstall';
+    $('install').classList.toggle('danger', action === 'uninstall');
+    $('install').textContent = running ? {install:'Installing…',modify:'Applying changes…',uninstall:'Uninstalling…'}[operation] : {install:'Install components',modify:'Apply changes',uninstall:'Uninstall OCR Bench'}[action];
+  }
+  for (const radio of document.querySelectorAll('input[name=action]')) radio.addEventListener('change', modeFields);
+  function inventory(info, initial = false) {
+    if (!info) return;
+    const previous = installed;
+    installed = !!info.installed;
+    $('maintenance').hidden = !installed;
+    $('installed-version').textContent = installed ? 'Version ' + info.version + ' in this Python environment' : '';
+    $('environment-installation').textContent = installed ? 'OCR Bench '+info.version+' is registered in this environment.' : info.error || 'No OCR Bench app registration was found in this environment.';
+    for (const radio of document.querySelectorAll('input[name=action]')) radio.disabled = running || !installed;
+    if (previous !== installed) document.querySelector('input[value=modify]').checked = true;
+    for (const name of ['rapidocr','paddleocr','easyocr']) {
+      const version = (info.packages || {})[name];
+      $(name+'-version').textContent = version ? version : '';
+      if (initial && installed) document.querySelector('input[name=component][value='+name+']').checked = !!version;
+    }
+    modeFields();
+  }
+  function backendFields() {
+    const backend = $('backend').value;
+    $('native-fields').hidden = backend !== 'pytesseract';
+    $('data-fields').hidden = backend === 'skip' || backend === 'auto';
+    $('backend-note').textContent = backend === 'auto' ? 'Installs native Windows Tesseract and English data using WinGet, or verifies an existing installation. This option downloads from public sources and may show a Windows administrator prompt. Uses pytesseract; no tesserocr wheel is needed.' : backend === 'skip' ? 'Installs RapidOCR, PaddleOCR, and EasyOCR. Your saved Tesseract settings are preserved.' : backend === 'tesserocr' ? 'Requires the approved tesserocr 2.10.0 Windows / Python 3.12 wheel in your feed. Language models are separate.' : 'Uses your existing Tesseract executable. No tesserocr wheel is requested.';
+  }
+  $('backend').addEventListener('change', backendFields);
+  function gpuFields() {
+    const enabled = $('device').value !== 'cpu';
+    $('gpu-fields').hidden = !enabled;
+    for (const gpu of document.querySelectorAll('input[name=gpu_component]')) {
+      gpu.disabled = !enabled || !document.querySelector('input[name=component][value='+gpu.value+']').checked;
+    }
+  }
+  $('device').addEventListener('change', gpuFields);
+  for (const component of document.querySelectorAll('input[name=component]')) component.addEventListener('change', gpuFields);
+  async function request(path, options) {
+    const response = await fetch(path, options);
+    const value = await response.json();
+    if (!response.ok) throw new Error(value.error || 'Installer request failed.');
+    return value;
+  }
+  function message(text, error = false) {$('message').textContent = text; $('message').dataset.error = error;}
+  function render(status) {
+    running = status.state === 'running';
+    appState = status.app_state || 'idle';
+    operation = status.operation || 'install';
+    inventory(status.installation);
+    $('install').disabled = running || !token;
+    modeFields();
+    $('start').disabled = !token || running || launchPending || appState === 'starting' || appState === 'stopping' || (!installed && appState !== 'running');
+    $('start').textContent = launchPending || appState === 'starting' ? 'Starting…' : appState === 'stopping' ? 'Stopping…' : appState === 'running' ? 'Stop Workbench' : 'Start Workbench';
+    $('state').dataset.state = status.state;
+    $('state').textContent = {idle:'Ready', running:'Installing…', succeeded:'Complete', partial:'Partially complete', failed:'Failed'}[status.state];
+    $('app-state').dataset.state = appState;
+    $('app-state').textContent = {idle:'', starting:'Workbench starting…', stopping:'Stopping workbench…', running:'Workbench ready', failed:'Workbench failed', stopped:'Workbench stopped'}[appState];
+    const link = $('open-workbench');
+    link.hidden = appState !== 'running';
+    if (status.app_url) link.href = status.app_url;
+    const output = $('output'), atEnd = output.scrollHeight - output.scrollTop - output.clientHeight < 40;
+    let text = status.output || (running ? 'Starting installer…' : '');
+    if (status.app_output) text += (text ? '\n\n' : '') + '── Workbench ──\n' + status.app_output;
+    output.textContent = text || 'Your installation log will appear here.';
+    if (atEnd) output.scrollTop = output.scrollHeight;
+    $('success').hidden = !['succeeded','partial'].includes(status.state);
+    $('success').classList.toggle('partial', status.state === 'partial');
+    $('success').textContent = status.state === 'partial' ? 'CPU/app components are installed. Some GPU setups failed; successful setups were kept. See the log and adjust GPU engine selection.' : operation === 'uninstall' ? 'OCR Bench removed. Shared libraries and saved data were kept.' : 'Changes complete. Choose Start Workbench to begin.';
+    $('gpu-results').hidden = !status.setup_results;
+    if (status.setup_results) {
+      const names = {rapidocr:'RapidOCR GPU',paddleocr:'PaddleOCR GPU',easyocr:'EasyOCR GPU'};
+      $('gpu-results').textContent = 'CPU/app: installed. ' + Object.entries(status.setup_results.gpu || {}).map(([engine,result]) => names[engine]+': '+result.state).join(' · ');
+    }
+    if (running) message(operation === 'uninstall' ? 'Uninstalling OCR Bench…' : 'Applying installation changes…');
+    else if (status.state === 'partial') message('CPU/app ready; open Details for GPU setup results.', true);
+    else if (appState === 'failed') message('Could not start the workbench. Open Details to view the log.', true);
+    else if (appState === 'starting') message('Starting with the installer’s Python environment…');
+    else if (appState === 'running') message('Workbench is ready. Choose Open Workbench.');
+    else if (appState === 'stopped') message('Workbench stopped. You can modify or uninstall OCR Bench.');
+    else if (status.state === 'succeeded') message(operation === 'uninstall' ? 'OCR Bench uninstalled from this environment.' : 'Changes complete. Your workbench is ready to start.');
+    else if (status.state === 'failed') message('Setup failed. Open Details, then adjust settings and retry.', true);
+  }
+  $('form').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (running) return;
+    const data = new FormData($('form'));
+    const action = selectedAction();
+    const values = action === 'uninstall' ? {action} : Object.fromEntries(data);
+    if (action !== 'uninstall') {
+      values.action = action;
+      delete values.component;
+      delete values.gpu_component;
+      values.engines = data.getAll('component');
+      values.gpu_engines = $('device').value === 'cpu' ? [] : data.getAll('gpu_component');
+      if ($('backend').value !== 'skip') values.engines.push('tesseract');
+    }
+    $('install').disabled = true;
+    try {
+      render(await request('/api/install', {method:'POST', headers:{'Content-Type':'application/json', 'X-OCRBench-Installer':token}, body:JSON.stringify(values)}));
+      if (values.access_token) for (const id of ['access_token','index_url','token_user']) $(id).value = '';
+    } catch (error) {message(error.message, true); $('install').disabled = false;}
+  });
+  $('start').addEventListener('click', async () => {
+    const stop = appState === 'running';
+    launchPending = true; $('start').disabled = true; $('start').textContent = stop ? 'Stopping…' : 'Starting…';
+    try {
+      const status = await request(stop ? '/api/stop' : '/api/launch', {method:'POST', headers:{'Content-Type':'application/json', 'X-OCRBench-Installer':token}, body:'{}'});
+      launchPending = false; render(status);
+    } catch (error) {launchPending = false; $('start').disabled = running; $('start').textContent = 'Start Workbench'; message(error.message, true);}
+  });
+  const grip = $('log-resize'), shell = $('installer');
+  let logHeight = 210, drag = null;
+  try {const saved = Number(localStorage.getItem('ocrbench-installer-log-height')); if (saved >= 100) logHeight = saved;} catch {}
+  function resizeLog(height) {
+    const max = Math.max(100, Math.min(550, shell.clientHeight - 295));
+    logHeight = Math.max(100, Math.min(max, height));
+    shell.style.setProperty('--log-height', logHeight + 'px');
+    grip.setAttribute('aria-valuemax', String(max));
+    grip.setAttribute('aria-valuenow', String(Math.round(logHeight)));
+    try {localStorage.setItem('ocrbench-installer-log-height', String(logHeight));} catch {}
+  }
+  grip.addEventListener('pointerdown', event => {
+    if (event.button !== 0) return;
+    drag = {y:event.clientY, height:logHeight};
+    grip.setPointerCapture(event.pointerId); event.preventDefault();
+  });
+  grip.addEventListener('pointermove', event => {if (drag) resizeLog(drag.height + drag.y - event.clientY);});
+  function endDrag() {drag = null;}
+  grip.addEventListener('pointerup', endDrag);
+  grip.addEventListener('pointercancel', endDrag);
+  grip.addEventListener('lostpointercapture', endDrag);
+  grip.addEventListener('keydown', event => {
+    const delta = {ArrowUp:20, ArrowDown:-20, PageUp:80, PageDown:-80}[event.key];
+    if (delta !== undefined) {event.preventDefault(); resizeLog(logHeight + delta);}
+    if (event.key === 'Home') {event.preventDefault(); resizeLog(100);}
+    if (event.key === 'End') {event.preventDefault(); resizeLog(550);}
+  });
+  window.addEventListener('resize', () => resizeLog(logHeight));
+  let logsOpen = false;
+  $('details').addEventListener('click', () => {
+    logsOpen = !logsOpen;
+    shell.classList.toggle('logs-open',logsOpen);
+    $('log-panel').hidden = !logsOpen; grip.hidden = !logsOpen;
+    $('details').setAttribute('aria-expanded',String(logsOpen));
+    $('details').textContent = logsOpen ? 'Hide details' : 'Details';
+    resizeLog(logHeight);
+  });
+  resizeLog(logHeight);
+  activeSection(location.hash.slice(1));
+  async function poll() {
+    try {render(await request('/api/status'));}
+    catch (error) {message('Connection lost. Check the installer terminal and reload.', true); $('install').disabled = true; $('start').disabled = true;}
+    setTimeout(poll, 1000);
+  }
+  async function init() {
+    try {
+      const config = await request('/api/config');
+      token = config.token;
+      inventory(config.installation, true);
+      $('target').textContent = config.target;
+      $('pip-config-path').textContent = config.pip_config_path;
+      $('environment-title').textContent = config.active ? 'Using your current virtual environment' : 'Using the project environment';
+      $('environment-help').textContent = config.active ? 'Components and the workbench use this environment. No additional project .venv is created.' : 'Setup creates or reuses the project .venv. The workbench will use that environment.';
+      for (const field of ['backend','python','tesseract_path','tessdata_path']) $(field).value = config[field];
+      backendFields(); gpuFields(); message('Ready to install or start your workbench.'); await poll();
+    } catch (error) {message(error.message, true);}
+  }
+  init();
+</script></body></html>

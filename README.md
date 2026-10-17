@@ -2,9 +2,21 @@
 
 A local Windows OCR benchmarking app with a browser workbench and a headless Python runner. It uses real inference, keeps each engine in a separate persistent process, and runs candidates sequentially. The supplied Pivi Pro image is included as a development fixture.
 
-## Install from your internal pip feed (Python only)
+## Install on a personal or work PC (Python only)
 
 Use **Windows x64 / Python 3.12**. See the complete [Artifactory installation guide](docs/internal-installation.md), including the package/build inventory, authentication, certificates, and offline model setup.
+
+Run `python install.py` with no arguments to open the local browser installer. Choose CPU/GPU support, Tesseract **Auto install (personal PC)**, installed Tesseract, bundled tesserocr, or no Tesseract, and optionally an internal pip URL and corporate CA bundle. The page shows the target environment and live installation output, including failures and retry. It uses Python's standard library and works before the dashboard packages are installed. Keep the terminal open; Ctrl+C closes the installer. Passing any arguments keeps command-line installation available.
+
+The installer appears as a modern card over an Ubuntu-inspired background. Components, Package source, and Environment are separate pages selected in the sidebar. Logs start collapsed; click **Details** to expand them, then drag the divider to resize. **Start Workbench** launches `start.py` in the installer's current environment; choose **Open Workbench** once it is ready.
+
+In **Package source**, provide both an Artifactory URL and token to save them to your user pip.ini before installation. The token is stored in plain text in that file, with an optional username, and kept out of installer logs and command arguments. Leave both fields blank to leave existing pip settings unchanged (PyPI is the default when no source is configured). All package installations then use pip normally. Existing installations offer **Modify / repair** and **Uninstall**. Uninstall runs from a neutral directory and verifies registration removal, while keeping shared libraries, environments, source files, models, and saved runs.
+
+On a personal PC, leave the package-source fields blank. Plain PyPI installations automatically supplement GPU framework installs with the official Paddle and PyTorch CUDA indexes. Choose **Auto install (personal PC)** to install native Windows Tesseract and English data through WinGet, or reuse and verify an existing installation. This needs Windows App Installer and may show a Windows administrator prompt. The CLI equivalent is `python install.py --auto-install-tesseract --device auto`. This option uses pytesseract and does not require a tesserocr wheel.
+
+GPU engines can be selected independently of CPU components. A missing GPU package does not prevent attempts for the other selected engines: the installer retains successful setups and reports a partial result with a nonzero exit status. For all CPU components plus RapidOCR GPU only, use `python install.py --without-tesseract --device gpu --gpu-engines rapidocr`. Internal-feed installations require the selected CUDA wheels and dependencies in that feed, including `paddlepaddle-gpu==3.3.1`; the available 2.6.x builds do not satisfy that requirement. Private-source failures never trigger a public fallback.
+
+The app requirement now uses `torch==2.14.1` and `torchvision==0.29.1` without requiring the `+cpu` suffix. This accepts public-version builds mirrored in Artifactory and retains matching installed `+cpu` builds. GPU environments still require the approved CUDA builds listed below.
 
 If IT has already configured pip for your internal repository:
 
@@ -19,9 +31,9 @@ Or supply your PyPI simple-index URL explicitly:
 python install.py --index-url "https://artifactory.example.com/artifactory/api/pypi/python-virtual/simple" --tessdata-path "C:/OrgModels/tessdata"
 ~~~
 
-Replace the URL with your own repository. Explicit-index mode uses only that feed and ignores inherited configuration files/extra indexes/find-links for installer subprocesses. Supply --cert with a corporate CA bundle if needed; otherwise use your approved pip/keyring/netrc authentication. No credentials are stored in the checkout. Without --index-url, normal corporate pip configuration is honoured. A credential-free configuration example is in config/pip.ini.example.
+Replace the URL with your own repository. The CLI securely prompts for the Artifactory token when a URL is supplied, or reads OCRBENCH_INDEX_TOKEN and optional OCRBENCH_INDEX_USERNAME for noninteractive use. These settings are saved to the user pip configuration, outside this checkout. Supply --cert to save a corporate CA bundle if needed. Without URL/token inputs, existing settings remain unchanged. Normal pip precedence applies, including environment-variable and per-venv overrides. A placeholder configuration example is in config/pip.ini.example.
 
-The complete installer installs all four CPU Python engines/frameworks and defaults to the **tesserocr wheel**, which contains the native Tesseract library. It does not require micromamba, Conda, PowerShell activation, or tesseract.exe. Your internal feed must include the approved Python 3.12 / Windows x64 tesserocr 2.10.0 wheel with bundled Tesseract 5.5.2. The eng.traineddata model is a separate approved asset supplied using --tessdata-path; setup does not download models from public hosts.
+Without a native-Tesseract option, the command-line installer installs all four CPU Python engines/frameworks and defaults to the **tesserocr wheel**, which contains the native Tesseract library. It does not require micromamba, Conda, PowerShell activation, or tesseract.exe. Your internal feed must include the approved Python 3.12 / Windows x64 tesserocr 2.10.0 wheel with bundled Tesseract 5.5.2. The eng.traineddata model is a separate approved asset supplied using --tessdata-path. Only the explicit Auto install option enables native Tesseract downloads.
 
 requirements.txt installs the CPU Python components, including the legacy pytesseract wrapper. requirements-tesserocr.txt additionally installs the bundled library wheel. Both contain no public package-index directives. When run from an existing venv, the installer installs into that venv and start.py uses it too. Otherwise setup creates/reuses the project's .venv. Setup validates/persists the selected backend and model directory. Restart a running app after setup.
 
@@ -32,7 +44,7 @@ python install.py --device gpu --tessdata-path "C:/OrgModels/tessdata"
 python start.py --port 8766
 ~~~
 
-The default --device auto adds isolated CUDA environments when NVIDIA hardware is detected. CPU and CUDA framework builds must both be mirrored to the internal feed. Setup no longer switches to public PyTorch/Paddle indexes. Use --without-tesseract if needed, or --tesseract-backend pytesseract --tesseract-path with an existing approved executable. Tesseract remains CPU-only.
+The default --device auto adds isolated CUDA environments when NVIDIA hardware is detected. CPU and CUDA framework builds must both be mirrored to the internal feed. A configured internal feed is respected; only plain public PyPI uses the official PyTorch/Paddle CUDA indexes automatically. Use --auto-install-tesseract on a personal PC, --without-tesseract to skip it, or --tesseract-backend pytesseract --tesseract-path with an existing approved executable. Tesseract remains CPU-only.
 
 All other engines also need approved model weights. Stage caches or configure explicit model paths before offline use; a pip index configures Python packages, not framework-specific model download URLs. Details and EasyOCR's download_enabled setting are in the installation guide.
 
@@ -55,7 +67,7 @@ The supplied fixture includes positive PHONE/MEDIA queries, an absent NAVIGATION
 
 ## Engines and isolation
 
-The installer supplies all four engines through the configured pip feed, with Tesseract using the approved tesserocr wheel by default. The legacy executable backend remains available. All CPU Python components are available in the app environment. Existing isolated environments under .engines/<engine>/ are discovered and reused. Custom interpreters remain configurable in **Environments**. Each candidate runs in its own worker process. GPU builds always live in separate .engines/<engine>-gpu/ environments.
+Python components use the configured pip source, with official vendor CUDA indexes added only for plain public PyPI. Tesseract can use an approved bundled tesserocr wheel, an existing native executable, or the explicit personal-PC Auto install option. All selected CPU Python components are available in the app environment. Existing isolated environments under .engines/<engine>/ are discovered and reused. Custom interpreters remain configurable in **Environments**. Each candidate runs in its own worker process. GPU builds always live in separate .engines/<engine>-gpu/ environments.
 
 To provision or repair one isolated engine:
 
@@ -86,7 +98,7 @@ Official references: [ONNX CUDA](https://onnxruntime.ai/docs/execution-providers
 .\.venv\Scripts\python.exe -m ocrbench run configs/replay.json
 .\.venv\Scripts\python.exe -m ocrbench run configs/live.json
 .\.venv\Scripts\python.exe -m pytest -q --basetemp=.test-tmp
-node --test tests/live-preview.test.cjs
+node --test tests/history-export.test.cjs tests/live-preview.test.cjs
 ```
 
 `configs/compare.json` references the isolated PaddleOCR and EasyOCR environments. Provision models before timing production experiments. Cold first results are recorded separately and may include a first-use download. Warmups and first-result calls are excluded from the steady-state summary. Initialization failures are retained as unavailable candidates, and worker errors, invalid outputs, crashes, and timeouts are retained in evidence.
@@ -94,6 +106,8 @@ node --test tests/live-preview.test.cjs
 The Python entry points are `ocrbench.schema.RunConfig`, `ocrbench.runner.RunManager`, `ocrbench.metrics.quality`, and `ocrbench.metrics.application`. The HTTP API is documented at **/docs**; mutation requests need the `X-OCRBench: local` header. This header protects local browser writes from ordinary cross-origin forms. The server has no remote authentication and should remain bound to loopback.
 
 ## Saved images, replay, and camera capture
+
+Run history offers **Export CSV** and **Export Excel (.xlsx)**. Export **Visible results** to retain the current filters, comparison view and sort order, or **Selected runs · all engines** to include every engine from checked runs, including engines hidden by filters. Downloads contain one row per engine with run IDs, timestamps, settings, metrics and errors. Missing measurements remain blank; real zeros are preserved. Excel includes filters, frozen identifying columns and a Metric definitions sheet. CSV is UTF-8 with a BOM for Excel and stores F1/CER as numeric ratios; Excel displays those ratios as percentages. Install/update app requirements to include the openpyxl dependency. Exports do not include camera images or raw frame records.
 
 Saved-image runs use the same frames across candidates. Replay uses a constant arrival rate by default; headless configs can supply an ordered `replay_offsets_ms` array corresponding to `samples`, repeated with the configured cycle gap. Use captured sample IDs from the dataset API to replay a recorded camera session and supply its observed receive offsets.
 

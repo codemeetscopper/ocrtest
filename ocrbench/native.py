@@ -27,6 +27,8 @@ def tesseract_command():
     for variable in ('ProgramFiles', 'LOCALAPPDATA'):
         if os.environ.get(variable):
             candidates.append(str(Path(os.environ[variable])/'Tesseract-OCR/tesseract.exe'))
+    if os.environ.get('LOCALAPPDATA'):
+        candidates.append(str(Path(os.environ['LOCALAPPDATA'])/'Programs/Tesseract-OCR/tesseract.exe'))
     candidates.append(str(ROOT/'.engines/tesseract-native/Library/bin/tesseract.exe'))
     return next((str(Path(p)) for p in candidates if p and Path(p).is_file()), None)
 

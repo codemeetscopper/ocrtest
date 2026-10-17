@@ -1,3 +1,4 @@
+import configparser
 import json
 import os
 from pathlib import Path
@@ -8,32 +9,27 @@ import pytest
 from scripts import install_support as installer
 
 
-def test_explicit_index_removes_extra_sources_and_keeps_ca(monkeypatch, tmp_path):
-    monkeypatch.setattr(installer, '_pip_env', None)
-    monkeypatch.setenv('PIP_EXTRA_INDEX_URL', 'https://public.example/simple')
-    monkeypatch.setenv('PIP_FIND_LINKS', 'https://public.example/wheels')
-    monkeypatch.setenv('PIP_TRUSTED_HOST', 'artifactory.example')
-    cert = tmp_path/'corporate.pem'
-    cert.touch()
-    installer.configure_pip('https://artifactory.example/api/pypi/python-virtual/simple', str(cert))
-    env = installer._pip_env
-    assert env['PIP_CONFIG_FILE'] == os.devnull
-    assert env['PIP_INDEX_URL'] == 'https://artifactory.example/api/pypi/python-virtual/simple'
-    assert 'PIP_EXTRA_INDEX_URL' not in env and 'PIP_FIND_LINKS' not in env
-    assert 'PIP_TRUSTED_HOST' not in env
-    assert env['PIP_CERT'] == str(cert)
-    # Ask real pip which sources it would use; this performs no network request.
-    code = ('import json;from pip._internal.commands import create_command;'
-            'o,a=create_command("install").parse_args([]);'
-            'print(json.dumps([o.index_url,o.extra_index_urls,o.find_links]))')
-    result = subprocess.check_output([sys.executable,'-c',code],env=env,text=True)
-    assert json.loads(result) == [env['PIP_INDEX_URL'], [], []]
+def test_artifactory_is_saved_to_user_config_preserving_other_settings(monkeypatch, tmp_path):
+    config_path = tmp_path/'pip.ini'
+    config_path.write_text('[global]\ntimeout = 70\n[install]\nprogress-bar = off\n')
+    monkeypatch.setattr(installer,'user_pip_config_path',lambda:config_path)
+    monkeypatch.setenv('OCRBENCH_INDEX_TOKEN','test-token')
+    monkeypatch.setenv('OCRBENCH_INDEX_USERNAME','test-user')
+    cert = tmp_path/'corporate.pem';cert.touch()
+    installer.configure_pip('https://artifactory.example/simple',str(cert))
+    config = configparser.ConfigParser(interpolation=None)
+    config.read(config_path)
+    assert config['global']['index-url'] == 'https://test-user:test-token@artifactory.example/simple'
+    assert config['global']['timeout'] == '70'
+    assert config['install']['progress-bar'] == 'off'
+    assert config['global']['cert'] == str(cert.resolve())
 
 
 def test_default_install_honours_existing_corporate_pip_config(monkeypatch):
-    monkeypatch.setattr(installer, '_pip_env', {})
-    installer.configure_pip()
-    assert installer._pip_env is None
+    monkeypatch.delenv('OCRBENCH_INDEX_TOKEN',raising=False)
+    monkeypatch.delenv('OCRBENCH_INDEX_USERNAME',raising=False)
+    monkeypatch.setattr(installer,'user_pip_config_path',lambda:pytest.fail('Blank settings must not modify pip.ini'))
+    assert installer.configure_pip() is None
 
 
 def test_compiled_tesserocr_module_is_discovered_in_isolated_environment(monkeypatch,tmp_path):
@@ -52,9 +48,11 @@ def test_compiled_tesserocr_module_is_discovered_in_isolated_environment(monkeyp
     assert environments.discovered_interpreter('tesseract') == str(directory/'Scripts/python.exe')
 
 
-def test_index_credentials_are_not_written_in_command_log(monkeypatch, capsys):
-    monkeypatch.setattr(installer, '_pip_env', None)
-    installer.configure_pip('https://user:example-secret@artifactory.example/simple')
+def test_index_credentials_are_not_written_in_command_log(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(installer,'user_pip_config_path',lambda:tmp_path/'pip.ini')
+    monkeypatch.setenv('OCRBENCH_INDEX_TOKEN','example-secret')
+    monkeypatch.setenv('OCRBENCH_INDEX_USERNAME','user')
+    installer.configure_pip('https://artifactory.example/simple')
     monkeypatch.setattr(installer,'pip_controller',lambda:sys.executable)
     monkeypatch.setattr(installer.subprocess,'run',lambda *args,**kwargs:None)
     installer.pip_install('target-python','tesserocr==2.10.0')

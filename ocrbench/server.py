@@ -8,12 +8,14 @@ from pathlib import Path
 import sys
 import uuid
 import asyncio
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
-from .schema import RunConfig, Annotation
+from .schema import RunConfig, Annotation, HistoryExportSelection
+from .history_export import candidate_rows, csv_bytes, xlsx_bytes
 from .storage import ROOT, DATA, sample_list, sample_path, get_annotation, save_json, read_json, clear_camera_session
 from .runner import manager
 from .environments import discovered_interpreter
@@ -156,6 +158,27 @@ def start_run(config: RunConfig):
         raise HTTPException(422, str(exc))
     except RuntimeError as exc:
         raise HTTPException(409, str(exc))
+
+
+@app.post('/api/history/export/{format}')
+def export_history(format: str, selection: HistoryExportSelection):
+    if format not in ('csv', 'xlsx'):
+        raise HTTPException(404, 'Supported history exports: csv, xlsx')
+    history = {value['id']: candidate_rows(value) for value in runs()}
+    if selection.rows is None:
+        rows = [row for candidates in history.values() for row in candidates]
+    else:
+        rows = []
+        for reference in selection.rows:
+            candidates = history.get(reference.run_id)
+            if candidates is None or reference.candidate_index >= len(candidates):
+                raise HTTPException(404, 'Run or engine result no longer exists. Refresh history and retry.')
+            rows.append(candidates[reference.candidate_index])
+    content = csv_bytes(rows) if format == 'csv' else xlsx_bytes(rows)
+    media_type = 'text/csv; charset=utf-8' if format == 'csv' else 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
+    return Response(content, media_type=media_type,
+                    headers={'Content-Disposition': f'attachment; filename="ocrbench-history-{stamp}.{format}"'})
 
 
 @app.get("/api/runs/{run_id}")

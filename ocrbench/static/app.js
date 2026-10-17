@@ -8,6 +8,7 @@ let terms=[];
 let envs={};try{envs=JSON.parse(localStorage.getItem('ocrbench-environments')||'{}')}catch{}
 let annotationDraft=null, annotationJsonMode=false, dragStart=null, pendingPolygon=null;
 let historySelected=new Set(), historyCompare=false, historySort={key:'created',direction:-1};
+let historyAllRows=[], historyVisibleRows=[], historyExportBusy=false;
 let followLive=true, displayedSource=null, displayedRecord=null, sourceRequest=0, sourceKey='';
 
 async function api(path, options={}){
@@ -276,7 +277,9 @@ function renderHistory(){
   const rows=runs.flatMap(r=>(r.candidates?.length?r.candidates:r.config.engines.map(config=>({config,status:r.status}))).map((c,index)=>({r,c,index})));
   const visible=rows.filter(({r,c})=>(!historyCompare||historySelected.has(r.id))&&(!engine||c.config.engine===engine)&&(!device||c.config.device===device)&&(!completed||c.status==='completed'));
   const value=({r,c},key)=>({created:r.created_at,engine:names[c.config.engine],device:c.config.device,status:c.status,p95:c.summary?.latency_ms?.p95,fps:c.summary?.completed_fps,f1:c.summary?.e2e?.f1,cer:c.summary?.cer,ram:c.resources?.peak_process_tree_rss_mb,failures:c.summary?.failures})[key];
-  visible.sort((a,b)=>{const av=value(a,historySort.key),bv=value(b,historySort.key);if(av==null)return bv==null?0:1;if(bv==null)return -1;return (typeof av==='number'?av-bv:String(av).localeCompare(String(bv)))*historySort.direction});
+  const compare=(a,b)=>{const av=value(a,historySort.key),bv=value(b,historySort.key);if(av==null)return bv==null?0:1;if(bv==null)return -1;return (typeof av==='number'?av-bv:String(av).localeCompare(String(bv)))*historySort.direction};
+  visible.sort(compare);historyAllRows=rows.sort(compare);historyVisibleRows=visible;
+  updateHistoryExport();
   const columns=[['created','RUN / TIME'],['engine','ENGINE / DEVICE'],['status','STATUS'],['p95','P95 ↓ · MS'],['fps','FPS ↑'],['f1','F1 ↑'],['cer','CER ↓'],['ram','RAM · MB'],['failures','FAILURES']];
   $('history-list').innerHTML=`<table class="history-table"><thead><tr><th aria-label="Select runs"></th>${columns.map(([key,label])=>`<th aria-sort="${historySort.key===key?(historySort.direction===1?'ascending':'descending'):'none'}"><button data-history-sort="${key}">${label} <span>${historySort.key===key?(historySort.direction===1?'▴':'▾'):'↕'}</span></button></th>`).join('')}<th>SETUP / SOURCE</th><th>ACTIONS</th></tr></thead><tbody>${visible.length?visible.map(({r,c,index})=>{
     const s=c.summary||{},cfg=r.config,e=c.config,style=c.status==='completed'?'success':['queued','running','initializing'].includes(c.status)?'warning':'error';
@@ -290,6 +293,29 @@ function renderHistory(){
   document.querySelectorAll('[data-compare-run]').forEach(b=>b.onchange=()=>{b.checked?historySelected.add(b.dataset.compareRun):historySelected.delete(b.dataset.compareRun);renderHistory()});
   document.querySelectorAll('[data-open-run]').forEach(b=>b.onclick=guard(async()=>{await loadRun(b.dataset.openRun);candidateIndex=Number(b.dataset.openCandidate);frameIndex=currentRun.config.mode==='live'?Math.max(0,(currentCandidate()?.records.length||0)-1):0;const r=currentRecord();if(r&&samples.some(s=>s.id===r.sample_id))selectSample(r.sample_id);renderRun();showView('workbench')}));
   document.querySelectorAll('[data-rerun]').forEach(b=>b.onclick=guard(async()=>{const r=await api('/runs/'+b.dataset.rerun);applyConfig(r.config);showView('workbench');toast('Configuration loaded. Start a new run when ready.')}));
+}
+function historyExportRows(){
+  return $('history-export-scope').value==='selected'?historyAllRows.filter(({r})=>historySelected.has(r.id)):historyVisibleRows;
+}
+function updateHistoryExport(){
+  const selected=$('history-export-scope').value==='selected',count=historyExportRows().length;
+  for(const id of ['history-export-csv','history-export-xlsx'])$(id).disabled=historyExportBusy||!count;
+  $('history-export-scope').disabled=historyExportBusy;
+  $('history-export-note').textContent=historyExportBusy?'Preparing download…':selected?`${count} engine results from selected runs, including engines hidden by filters.`:`${count} visible engine results, in the current sort order.`;
+}
+async function exportHistory(format){
+  if(historyExportBusy)return;
+  const rows=historyExportRows().map(({r,index})=>({run_id:r.id,candidate_index:index}));
+  if(!rows.length)return;
+  historyExportBusy=true;updateHistoryExport();
+  try{
+    const response=await fetch(`/api/history/export/${format}`,{method:'POST',headers:{'Content-Type':'application/json','X-OCRBench':'local'},body:JSON.stringify({rows})});
+    if(!response.ok){const error=await response.json().catch(()=>({}));throw Error(typeof error.detail==='string'?error.detail:'Could not export run history. Refresh history and retry.')}
+    const url=URL.createObjectURL(await response.blob()),link=document.createElement('a');
+    link.href=url;link.download=response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]||`ocrbench-history.${format}`;
+    document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+    toast(`Exported ${rows.length} engine results as ${format==='xlsx'?'Excel':'CSV'}.`);
+  }finally{historyExportBusy=false;updateHistoryExport()}
 }
 function applyConfig(c){
   setMode(c.mode);if(c.samples.length)selectSample(c.samples[0]);
@@ -374,6 +400,9 @@ $('previous-camera-frame').onclick=()=>chooseCameraFrame(frameIndex-1);
 $('next-camera-frame').onclick=()=>chooseCameraFrame(frameIndex+1);
 $('show-labels').onchange=renderOverlay;new ResizeObserver(()=>renderOverlay()).observe($('image-stage'));
 for(const id of ['history-engine','history-device','history-completed'])$(id).onchange=renderHistory;
+$('history-export-scope').onchange=updateHistoryExport;
+$('history-export-csv').onclick=guard(()=>exportHistory('csv'));
+$('history-export-xlsx').onclick=guard(()=>exportHistory('xlsx'));
 $('compare-selected').onclick=()=>{historyCompare=!historyCompare;renderHistory()};
 $('clear-comparison').onclick=()=>{historySelected.clear();historyCompare=false;historySort={key:'created',direction:-1};$('history-engine').value='';$('history-device').value='';$('history-completed').checked=false;renderHistory()};
 $('device').onchange=refreshDeviceOptions;
