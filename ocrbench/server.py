@@ -18,7 +18,7 @@ from .storage import ROOT, DATA, sample_list, sample_path, get_annotation, save_
 from .runner import manager
 from .environments import discovered_interpreter
 from .terms import glossary, glossary_html
-from .native import tesseract_command
+from .native import tesseract_command, tesseract_backend, tesserocr_data
 
 @asynccontextmanager
 async def lifespan(app):
@@ -45,19 +45,25 @@ async def local_requests(request: Request, call_next):
 
 @app.get("/api/system")
 def system():
-    packages = {"rapidocr": "rapidocr", "paddleocr": "paddleocr", "easyocr": "easyocr", "tesseract": "pytesseract"}
+    backend = tesseract_backend()
+    packages = {"rapidocr": "rapidocr", "paddleocr": "paddleocr", "easyocr": "easyocr", "tesseract": backend}
     engines = []
+    native_tesseract = tesseract_command()
+    data = tesserocr_data() if backend == 'tesserocr' else None
+    native_ready = bool(data and (data/'eng.traineddata').is_file()) if backend == 'tesserocr' else bool(native_tesseract)
     for name, package in packages.items():
         installed = importlib.util.find_spec(package) is not None
         isolated = ROOT / ".engines" / name
-        isolated_installed = (isolated / "Scripts" / "python.exe").exists() and (isolated / "Lib" / "site-packages" / package).is_dir()
-        engines.append({"id": name, "installed": installed or isolated_installed,
-                        "status": "Isolated environment · preflight required" if isolated_installed else "App environment · preflight required" if installed else "Configure isolated environment",
+        isolated_installed = bool(discovered_interpreter(name))
+        ready = (installed or isolated_installed) and (name != 'tesseract' or native_ready)
+        engines.append({"id": name, "installed": ready,
+                        "status": "Approved native Tesseract runtime required" if name == 'tesseract' and not native_ready else "Isolated environment · preflight required" if isolated_installed else "App environment · preflight required" if installed else "Configure isolated environment",
                         "python_path": str(isolated / "Scripts" / "python.exe") if isolated_installed else None,
                         "gpu_python_path": discovered_interpreter(name, "gpu"),
                         "gpu": name != "tesseract", "environment": str(isolated / "Scripts" / "python.exe")})
     return {"engines": engines, "interpreter": sys.executable, "active_run": manager.active, "data_directory": str(DATA),
-            "tesseract_command": tesseract_command()}
+            "tesseract_command": native_tesseract, "tesseract_backend": backend,
+            "tesseract_data": str(data) if data else None}
 
 
 @app.get('/api/glossary')
@@ -134,6 +140,7 @@ def runs():
             {"name": c["name"], "config": c["config"], "status": c["status"],
              "summary": c.get("summary"), "resources": c.get("resources"),
              "observed_device": (c.get("identity") or {}).get("observed_device"),
+             "wrapper": (c.get("identity") or {}).get("wrapper") or ((c.get("identity") or {}).get("runtime") or {}).get("binding"),
              "error": c.get("error")}
             for c in value.get("candidates", [])
         ]

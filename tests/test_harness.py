@@ -53,6 +53,16 @@ def test_metric_definitions_are_available_and_exported(client):
     assert 'What do these terms mean?' in html and 'P95 latency' in html
 
 
+def test_missing_native_tesseract_is_not_reported_as_ready(client, monkeypatch):
+    import ocrbench.server as server
+    monkeypatch.setattr(server, 'tesseract_command', lambda: None)
+    monkeypatch.setattr(server.importlib.util, 'find_spec', lambda package: object())
+    engines = {e['id']:e for e in client.get('/api/system').json()['engines']}
+    assert not engines['tesseract']['installed']
+    assert engines['rapidocr']['installed']
+    assert 'runtime required' in engines['tesseract']['status']
+
+
 def test_session_frame_image_is_reviewable_without_entering_dataset(client, tmp_path, monkeypatch):
     import ocrbench.storage as storage
     from types import SimpleNamespace

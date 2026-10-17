@@ -1,0 +1,13 @@
+# Copy/adapt through your organisation's approved configuration process.
+# Windows user location: %APPDATA%/pip/pip.ini
+# Keep authentication in approved credential storage, outside this repository.
+[global]
+index-url = https://artifactory.example.com/artifactory/api/pypi/python-virtual/simple
+extra-index-url =
+find-links =
+disable-pip-version-check = true
+# cert = C:/OrgCertificates/corporate-ca.pem
+
+[install]
+extra-index-url =
+find-links =

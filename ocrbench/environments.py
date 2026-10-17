@@ -7,8 +7,14 @@ def discovered_interpreter(engine, device="cpu"):
     name = engine + ("-gpu" if device == "gpu" else "")
     directory = ROOT / ".engines" / name
     interpreter = directory / "Scripts" / "python.exe"
-    package = "pytesseract" if engine == "tesseract" else engine
-    if interpreter.exists() and (directory / "Lib" / "site-packages" / package).is_dir():
+    if engine == 'tesseract':
+        from .native import tesseract_backend
+        package = tesseract_backend()
+    else:
+        package = engine
+    site = directory / 'Lib' / 'site-packages'
+    present = (site/package).is_dir() or any(site.glob(package+'*.pyd'))
+    if interpreter.exists() and present:
         return str(interpreter)
     return None
 

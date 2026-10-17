@@ -64,6 +64,7 @@ class Adapter:
         self.model_configuration = None
         self.providers = None
         self.runtime_identity = None
+        self.wrapper = {"rapidocr": "rapidocr", "easyocr": "easyocr", "paddleocr": "paddleocr", "tesseract": "pytesseract"}[self.engine]
         if self.engine == "rapidocr":
             if self.device == "gpu":
                 import onnxruntime as ort
@@ -143,29 +144,47 @@ class Adapter:
                                      "cuda_dll_directories":dll_directories,
                                      "gpu_name":paddle.device.cuda.get_device_name(0) if self.device == "gpu" else None}
         else:
-            import pytesseract
-            from .native import tesseract_command, tesseract_data
+            from .native import tesseract_command, tesseract_data, tesseract_backend, tesserocr_data
             if self.device != "cpu":
                 raise ValueError("Tesseract baseline supports CPU only")
-            command = opts.get("tesseract_cmd") or tesseract_command()
-            if command:
-                pytesseract.pytesseract.tesseract_cmd = command
-                data = opts.get('tessdata_dir') or tesseract_data(command)
+            os.environ['OMP_THREAD_LIMIT'] = str(config['threads'])
+            self.effective_options['OMP_THREAD_LIMIT'] = config['threads']
+            self.wrapper = opts.get('backend') or ('pytesseract' if opts.get('tesseract_cmd') else tesseract_backend())
+            self.languages = ['eng' if language == 'en' else language for language in self.languages]
+            if self.wrapper == 'tesserocr':
+                import tesserocr
+                data = opts.get('tessdata_dir') or tesserocr_data()
+                if not data:
+                    raise ValueError('Configure approved Tesseract models with --tessdata-path.')
+                if opts.get('config'):
+                    raise ValueError('tesserocr uses options.psm, options.oem, and options.variables; CLI config is supported only by pytesseract.')
+                params = {'path': str(data), 'lang': '+'.join(self.languages), 'psm': int(opts.get('psm', 11)),
+                          'oem': int(opts.get('oem', 3)), 'variables': opts.get('variables', {})}
+                self.model = tesserocr.PyTessBaseAPI(**params)
+                self.tesserocr = tesserocr
+                self.effective_options.update({'backend': self.wrapper, **params})
+                self.runtime_identity = {'framework':'tesseract', 'version':tesserocr.tesseract_version(),
+                                         'binding':'tesserocr', 'execution':'persistent in-process library', 'tessdata':str(data)}
+            elif self.wrapper == 'pytesseract':
+                import pytesseract
+                command = opts.get('tesseract_cmd') or tesseract_command()
+                data = opts.get('tessdata_dir') or (tesseract_data(command) if command else None)
+                if command:
+                    pytesseract.pytesseract.tesseract_cmd = command
                 if data:
                     os.environ['TESSDATA_PREFIX'] = str(data)
-            self.languages = ['eng' if language == 'en' else language for language in self.languages]
-            if os.environ.get('TESSDATA_PREFIX'):
-                tessdata = Path(os.environ['TESSDATA_PREFIX'])
-                self.models = [str(tessdata/f'{language}.traineddata') for language in self.languages]
-                self.effective_options['tessdata_dir'] = str(tessdata)
-            self.effective_options['tesseract_cmd'] = pytesseract.pytesseract.tesseract_cmd
-            native_version = str(pytesseract.get_tesseract_version())
-            self.runtime_identity = {"framework": "tesseract", "version": native_version,
-                                     "executable": pytesseract.pytesseract.tesseract_cmd,
-                                     "tessdata": os.environ.get('TESSDATA_PREFIX')}
-            self.model = pytesseract
+                self.effective_options.update({'backend':self.wrapper, 'tesseract_cmd':pytesseract.pytesseract.tesseract_cmd})
+                self.runtime_identity = {'framework':'tesseract', 'version':str(pytesseract.get_tesseract_version()),
+                                         'binding':'pytesseract', 'execution':'native subprocess per call',
+                                         'executable':pytesseract.pytesseract.tesseract_cmd, 'tessdata':str(data) if data else None}
+                self.model = pytesseract
+            else:
+                raise ValueError('Tesseract backend must be tesserocr or pytesseract.')
+            if data:
+                self.models = [str(Path(data)/f'{language}.traineddata') for language in self.languages]
+                self.effective_options['tessdata_dir'] = str(data)
             self.observed = "cpu"
-        self.version = importlib.metadata.version({"rapidocr": "rapidocr", "easyocr": "easyocr", "paddleocr": "paddleocr", "tesseract": "pytesseract"}[self.engine])
+        self.version = importlib.metadata.version(self.wrapper)
 
     def predict(self, image):
         if self.engine == "rapidocr":
@@ -197,6 +216,24 @@ class Adapter:
         from PIL import Image
         # pytesseract accepts RGB; OpenCV arrays from our pipeline are BGR.
         import cv2
+        if self.wrapper == 'tesserocr':
+            self.model.SetImage(Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB)))
+            try:
+                self.model.Recognize()
+                iterator = self.model.GetIterator()
+                if iterator is None:
+                    return []
+                level = self.tesserocr.RIL.TEXTLINE
+                predictions = []
+                for line in self.tesserocr.iterate_level(iterator, level):
+                    text = line.GetUTF8Text(level)
+                    box = line.BoundingBox(level)
+                    if text and text.strip() and box:
+                        x,y,r,b = box
+                        predictions.append(region([[x,y],[r,y],[r,b],[x,b]], text.rstrip('\r\n'), float(line.Confidence(level))/100))
+                return predictions
+            finally:
+                self.model.Clear()
         data = self.model.image_to_data(Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB)),
                    lang="+".join(self.languages), config=self.config.get("options", {}).get("config", "--psm 11"),
                    output_type=self.model.Output.DICT)
@@ -228,6 +265,7 @@ class Adapter:
                 "languages": self.languages, "models": files, "options": self.config.get("options", {}),
                 "effective_options": self.effective_options,
                 "runtime": self.runtime_identity,
+                "wrapper": self.wrapper,
                 "model_configuration": json.loads(json.dumps(self.model_configuration, default=str)),
                 "precision": "engine default; not a controlled precision comparison",
                 "synchronization": "explicit CUDA synchronization" if self.device == "gpu" and self.engine in ("easyocr", "paddleocr") else "completed host outputs",

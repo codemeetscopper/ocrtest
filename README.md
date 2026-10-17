@@ -2,31 +2,41 @@
 
 A local Windows OCR benchmarking app with a browser workbench and a headless Python runner. It uses real inference, keeps each engine in a separate persistent process, and runs candidates sequentially. The supplied Pivi Pro image is included as a development fixture.
 
-## Install and start — Python only
+## Install from your internal pip feed (Python only)
 
-Use **64-bit Python 3.12**. No PowerShell scripts, activation scripts, administrator installer, or execution-policy changes are needed. From this checkout:
+Use **Windows x64 / Python 3.12**. See the complete [Artifactory installation guide](docs/internal-installation.md), including the package/build inventory, authentication, certificates, and offline model setup.
+
+If IT has already configured pip for your internal repository:
 
 ~~~text
-python install.py
+python install.py --tessdata-path "C:/OrgModels/tessdata"
 python start.py
 ~~~
 
-The installer creates/reuses .venv and installs **all four OCR Python components and CPU frameworks from requirements.txt**: RapidOCR/ONNX Runtime, PaddleOCR/PaddlePaddle, EasyOCR/PyTorch, and pytesseract. It also provisions Tesseract's native runtime and English language data. By default, --device auto installs separate CUDA environments for RapidOCR, PaddleOCR, and EasyOCR when NVIDIA hardware is detected. Tesseract remains CPU-only.
+Or supply your PyPI simple-index URL explicitly:
 
 ~~~text
-python install.py --device cpu
-python install.py --device gpu
-python install.py --python C:/Python312/python.exe
+python install.py --index-url "https://artifactory.example.com/artifactory/api/pypi/python-virtual/simple" --tessdata-path "C:/OrgModels/tessdata"
+~~~
+
+Replace the URL with your own repository. Explicit-index mode uses only that feed and ignores inherited configuration files/extra indexes/find-links for installer subprocesses. Supply --cert with a corporate CA bundle if needed; otherwise use your approved pip/keyring/netrc authentication. No credentials are stored in the checkout. Without --index-url, normal corporate pip configuration is honoured. A credential-free configuration example is in config/pip.ini.example.
+
+The complete installer installs all four CPU Python engines/frameworks and defaults to the **tesserocr wheel**, which contains the native Tesseract library. It does not require micromamba, Conda, PowerShell activation, or tesseract.exe. Your internal feed must include the approved Python 3.12 / Windows x64 tesserocr 2.10.0 wheel with bundled Tesseract 5.5.2. The eng.traineddata model is a separate approved asset supplied using --tessdata-path; setup does not download models from public hosts.
+
+requirements.txt installs the CPU Python components, including the legacy pytesseract wrapper. requirements-tesserocr.txt additionally installs the bundled library wheel. Both contain no public package-index directives. When run from an existing venv, the installer installs into that venv and start.py uses it too. Otherwise setup creates/reuses the project's .venv. Setup validates/persists the selected backend and model directory. Restart a running app after setup.
+
+~~~text
+python install.py --python C:/Python312/python.exe --tessdata-path "C:/OrgModels/tessdata"
+python install.py --device cpu --tessdata-path "C:/OrgModels/tessdata"
+python install.py --device gpu --tessdata-path "C:/OrgModels/tessdata"
 python start.py --port 8766
 ~~~
 
-Choose --python when your default Python is not 3.12. Environments also require Python 3.12. The bootstrap Python needs pip or ensurepip. Failures stop with a nonzero exit code and can be retried.
+The default --device auto adds isolated CUDA environments when NVIDIA hardware is detected. CPU and CUDA framework builds must both be mirrored to the internal feed. Setup no longer switches to public PyTorch/Paddle indexes. Use --without-tesseract if needed, or --tesseract-backend pytesseract --tesseract-path with an existing approved executable. Tesseract remains CPU-only.
 
-For Python packages only, **python -m pip install -r requirements.txt** now installs every OCR Python component and CPU framework; requirement.txt is an alias. A pip requirements file cannot provision a native executable or isolate CPU/CUDA framework builds. **python install.py is the complete requirements-based installation command**, performing those additional steps automatically. NVIDIA driver installation remains a host prerequisite.
+All other engines also need approved model weights. Stage caches or configure explicit model paths before offline use; a pip index configures Python packages, not framework-specific model download URLs. Details and EasyOCR's download_enabled setting are in the installation guide.
 
-The portable Windows Tesseract runtime is installed under .engines/tesseract-native using conda-forge packages via the [official standalone micromamba distribution](https://mamba.readthedocs.io/en/latest/installation/micromamba-installation.html#manual-installation). It does not install Conda globally, activate a shell, change system PATH, or request administrator rights. Existing Tesseract installations are reused. OCRBENCH_TESSERACT and the tesseract_cmd engine option override discovery.
-
-Open **http://127.0.0.1:8765**. The server binds to loopback. Images, annotations, and records stay on this computer. Initial provisioning downloads packages; first inference may download models. Keep this checkout because fixture data and worker sources live here.
+The bootstrap Python needs pip or ensurepip. Setup creates environments without activation scripts and fails with a nonzero exit code if a required artifact is missing. Open **http://127.0.0.1:8765** after launching. Keep this checkout because fixture data and worker sources live here.
 
 ## Workbench workflow
 
@@ -45,7 +55,7 @@ The supplied fixture includes positive PHONE/MEDIA queries, an absent NAVIGATION
 
 ## Engines and isolation
 
-The complete installer supplies RapidOCR, PaddleOCR, EasyOCR, and Tesseract, including their CPU frameworks/native runtime. All CPU Python components are available in the app environment. Existing isolated environments under .engines/<engine>/ are discovered and reused. Custom interpreters remain configurable in **Environments**. Each candidate runs in its own worker process. GPU builds always live in separate .engines/<engine>-gpu/ environments.
+The installer supplies all four engines through the configured pip feed, with Tesseract using the approved tesserocr wheel by default. The legacy executable backend remains available. All CPU Python components are available in the app environment. Existing isolated environments under .engines/<engine>/ are discovered and reused. Custom interpreters remain configurable in **Environments**. Each candidate runs in its own worker process. GPU builds always live in separate .engines/<engine>-gpu/ environments.
 
 To provision or repair one isolated engine:
 
@@ -58,11 +68,11 @@ python scripts/setup_engine.py --engine paddleocr --device gpu --python C:/Pytho
 python scripts/setup_engine.py --engine easyocr --device gpu --python C:/Python312/python.exe
 ~~~
 
-CUDA setup uses ONNX Runtime 1.31.0 CUDA/cuDNN extras, PaddlePaddle GPU 3.3.1 from its official CUDA 13 index, and PyTorch 2.14.1 / torchvision 0.29.1 from the official CUDA 13 index. GPU interpreters are discovered automatically. A compatible NVIDIA driver and real CUDA device are required. Real-image preflight rejects silent CPU fallback. ONNX may assign unsupported operations to CPU, which its observed-device identity explicitly describes. GPU utilization and VRAM telemetry remain unavailable.
+CUDA setup resolves the approved ONNX Runtime 1.31.0 CUDA/cuDNN extras, PaddlePaddle GPU 3.3.1 CUDA 13 wheel, and PyTorch 2.14.1+cu130 / torchvision 0.29.1+cu130 builds from your configured internal pip feed. GPU interpreters are discovered automatically. A compatible NVIDIA driver and real CUDA device are required. Real-image preflight rejects silent CPU fallback. ONNX may assign unsupported operations to CPU, which its observed-device identity explicitly describes. GPU utilization and VRAM telemetry remain unavailable.
 
 The Paddle worker registers and preloads DLLs from its own pip NVIDIA folders, including nvidia/cu13/bin/x86_64 and nvidia/cudnn/bin, without editing system PATH. GPU synchronization uses paddle.device.synchronize. CPU Paddle defaults to enable_mkldnn=false because the tested Windows oneDNN route failed; overrides remain configurable.
 
-Tesseract uses language codes such as eng; the adapter accepts en for English. RapidOCR's default model is conservatively limited to en/ch_sim unless a recognition model is supplied. Language coverage and combinations remain engine-specific. Workbench options apply to every selected engine; headless configurations allow per-engine options. Custom model licensing/provenance remains a deployment check.
+Tesseract supports tesserocr (persistent in-process library) and pytesseract (native subprocess per request); runtime identity records that distinction. Compare matching bindings when judging timing. Tesseract uses language codes such as eng; the adapter accepts en for English. RapidOCR's default model is conservatively limited to en/ch_sim unless a recognition model is supplied. Language coverage and combinations remain engine-specific. Workbench options apply to every selected engine; headless configurations allow per-engine options. Custom model licensing/provenance remains a deployment check.
 
 Use **? Terms & metrics** on any page, expand **What do these terms mean?**, or hover/focus a marked table heading. HTML exports include the same definitions. F1 balances precision/recall for exactly matching text and overlapping regions; higher is better. CER is character edits/reference characters; lower is better and it can exceed 100%. P95 is the 95th percentile of successful warm-call durations in milliseconds; lower is faster. Completed FPS is successful frames per measurement-loop wall second; higher is better. Peak RAM is sampled worker-tree resident memory in MB. Confidence is an engine score, not verified accuracy or a calibrated probability shared by engines. A dash means unavailable, never zero or a pass. The full glossary also covers units, arrows, missing values, IoU, cold start, warmups, queues, and application checks.
 

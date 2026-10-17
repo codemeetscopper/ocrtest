@@ -9,8 +9,8 @@ def main():
     parser.add_argument('--port', type=int, default=8765)
     args = parser.parse_args()
     root = Path(__file__).resolve().parent
-    from scripts.install_support import python_in
-    python = python_in(root/'.venv')
+    from scripts.install_support import app_python
+    python = app_python()
     if not python.exists():
         parser.error('App environment missing. Run python install.py first.')
     print(f'OCR Bench: http://127.0.0.1:{args.port}', flush=True)

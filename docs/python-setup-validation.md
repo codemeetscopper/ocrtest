@@ -1,5 +1,7 @@
 # Python setup and metric help validation
 
+Historical validation from 16 October 2026. The installer was changed on 17 October: it now uses an existing approved Tesseract runtime via --tesseract-path, or skips native Tesseract with --without-tesseract. It no longer downloads or executes a native package manager.
+
 Validated 16 October 2026 on Windows x64 / Python 3.12.
 
 - `python install.py --device cpu` completed successfully, including all four CPU Python engines and portable Tesseract 5.5.3.

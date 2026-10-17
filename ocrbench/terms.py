@@ -2,6 +2,7 @@
 import html
 
 TERMS = [
+    ('Tesseract binding', 'tesserocr uses the native Tesseract library inside a persistent worker. pytesseract starts the executable for each request. Native versions, models, and wrapper overhead can differ; compare matching bindings when interpreting timing.', []),
     ('Engine / device', 'OCR is optical character recognition: reading text from images. Engine identifies the software. CPU is the computer processor; GPU is the graphics processor. Observed device reports actual execution. CUDA is NVIDIA GPU computing; ONNX may still assign some operations to CPU.', ['ENGINE / DEVICE']),
     ('Status', 'Completed means the candidate finished. Error, unavailable, timeout, or crash means it did not finish normally. Check failures and the worker log as well as this status.', ['STATUS']),
     ('Text F1', 'Higher is better. Balances precision (how many predicted regions are correct) and recall (how many expected regions were found). A correct match requires sufficient polygon overlap and exactly matching text. Requires reviewed, complete ground truth.', ['TEXT F1', 'F1']),
