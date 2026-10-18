@@ -19,6 +19,9 @@ from scripts import install_ui
 
 class PipSettingsTests(unittest.TestCase):
     def setUp(self):
+        source = patch.object(support, '_package_source', {'mode':'public', 'index':support.PUBLIC_INDEX, 'cert':None})
+        source.start()
+        self.addCleanup(source.stop)
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.path = Path(directory.name)/'pip/pip.ini'
@@ -72,10 +75,11 @@ class PipSettingsTests(unittest.TestCase):
         actual = json.loads(subprocess.check_output([sys.executable,'-c',code],env=env,text=True))
         self.assertEqual(actual,[expected,[],[],str(cert.resolve()),77])
 
-    def test_pip_install_uses_normal_process_configuration(self):
+    def test_pip_install_uses_the_selected_source_environment(self):
         with patch.object(support,'pip_controller',return_value='controller-python'),patch.object(support,'run') as run:
             support.pip_install('target-python','rapidocr')
-        self.assertEqual(run.call_args.kwargs,{})
+        self.assertEqual(run.call_args.kwargs['env']['PIP_INDEX_URL'],'https://pypi.org/simple')
+        self.assertEqual(run.call_args.kwargs['env']['PIP_CONFIG_FILE'],os.devnull)
         self.assertNotIn('--index-url',run.call_args.args[0])
         self.assertNotIn('--extra-index-url',run.call_args.args[0])
 

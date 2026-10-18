@@ -25,11 +25,13 @@ def test_artifactory_is_saved_to_user_config_preserving_other_settings(monkeypat
     assert config['global']['cert'] == str(cert.resolve())
 
 
-def test_default_install_honours_existing_corporate_pip_config(monkeypatch):
+def test_default_install_uses_public_without_modifying_saved_config(monkeypatch):
     monkeypatch.delenv('OCRBENCH_INDEX_TOKEN',raising=False)
     monkeypatch.delenv('OCRBENCH_INDEX_USERNAME',raising=False)
     monkeypatch.setattr(installer,'user_pip_config_path',lambda:pytest.fail('Blank settings must not modify pip.ini'))
     assert installer.configure_pip() is None
+    assert installer.uses_public_pypi('target')
+    assert installer.pip_environment()['PIP_INDEX_URL'] == 'https://pypi.org/simple'
 
 
 def test_compiled_tesserocr_module_is_discovered_in_isolated_environment(monkeypatch,tmp_path):
@@ -75,17 +77,17 @@ def test_bundled_backend_verification_saves_library_and_model_settings(monkeypat
     assert native.tesserocr_data() == data
 
 
-def test_default_installer_uses_tesserocr_requirements(monkeypatch,tmp_path):
+def test_default_installer_checks_bundled_engine_before_app_requirements(monkeypatch,tmp_path):
     import install as entry
     monkeypatch.setattr(sys,'argv',['install.py','--device','cpu','--tessdata-path',str(tmp_path)])
     calls=[]
     monkeypatch.setattr(entry,'configure_pip',lambda *args:None)
     monkeypatch.setattr(entry,'app_environment',lambda *args:'python312')
     monkeypatch.setattr(entry,'pip_install',lambda python,*args:calls.append(args))
-    monkeypatch.setattr(entry,'configure_tesserocr',lambda python,data:calls.append(('models',data)))
+    monkeypatch.setattr(entry,'install_tesserocr',lambda python,data,wheel:calls.append(('bundled',data,wheel)))
     monkeypatch.setattr(entry,'ensure_tesseract',lambda *args:pytest.fail('Must not require tesseract.exe'))
     entry.main()
-    assert calls == [('-r',str(entry.ROOT/'requirements-tesserocr.txt')),('models',str(tmp_path))]
+    assert calls == [('bundled',str(tmp_path),None),('-r',str(entry.ROOT/'requirements.txt'))]
 
 
 def fake_tesserocr(monkeypatch,tmp_path,empty=False):

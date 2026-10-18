@@ -3,7 +3,7 @@ import argparse
 import json
 import os
 import sys
-from scripts.install_support import ROOT, app_environment, app_python, has_nvidia, pip_install, setup_engine, ensure_tesseract, configure_pip, configure_tesserocr, auto_install_tesseract
+from scripts.install_support import ROOT, app_environment, app_python, has_nvidia, pip_install, setup_engine, ensure_tesseract, configure_pip, auto_install_tesseract, install_tesserocr
 
 
 class GPUProvisioningError(RuntimeError):
@@ -18,7 +18,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     default_python = app_python()
     parser.add_argument('--python', default=str(default_python) if default_python.exists() else sys.executable,
-                        help='64-bit Python 3.12 used when creating environments; the running venv is reused for app packages')
+                        help='64-bit Python 3.10-3.13 used when creating environments; the running venv is reused for app packages')
     parser.add_argument('--device', choices=('auto', 'cpu', 'gpu'), default='auto',
                         help='auto installs CUDA engines when nvidia-smi detects NVIDIA hardware')
     native = parser.add_mutually_exclusive_group()
@@ -27,10 +27,12 @@ def main(argv=None):
     native.add_argument('--auto-install-tesseract', action='store_true', help='Install native Windows Tesseract with WinGet (personal PC), then verify English OCR')
     parser.add_argument('--tessdata-path', help='Existing folder containing eng.traineddata')
     parser.add_argument('--tesseract-backend', choices=('tesserocr', 'pytesseract'), default='tesserocr', help='Bundled Python wheel (default) or an existing native executable')
+    parser.add_argument('--tesserocr-wheel', help='Local approved tesserocr .whl file matching this Python and platform; otherwise use configured pip sources')
     parser.add_argument('--index-url', help='Save Artifactory URL and token to user pip.ini; token comes from OCRBENCH_INDEX_TOKEN or a secure terminal prompt')
     parser.add_argument('--cert', help='Corporate CA bundle for HTTPS package downloads')
     parser.add_argument('--engines', help='Comma-separated components to install/repair; empty installs the dashboard only')
     parser.add_argument('--gpu-engines', help='Comma-separated engines to provision for GPU; defaults to all selected supported engines')
+    parser.add_argument('--cuda', choices=('auto', 'cuda12', 'cuda13'), default='auto', help='GPU compatibility: auto reads the NVIDIA driver; CUDA 12 requires driver support for 12.8+')
     parser.add_argument('--uninstall', action='store_true', help='Remove OCR Bench from this environment, keeping shared packages and saved data')
     args = parser.parse_args(argv)
     if args.uninstall:
@@ -54,23 +56,20 @@ def main(argv=None):
     if args.auto_install_tesseract and args.tessdata_path:
         parser.error('--auto-install-tesseract uses the installed English data; omit --tessdata-path')
     backend = 'pytesseract' if args.tesseract_path or args.auto_install_tesseract else args.tesseract_backend
+    if args.tesserocr_wheel and (skip_tesseract or backend != 'tesserocr'):
+        parser.error('--tesserocr-wheel requires bundled Tesseract (tesserocr).')
     if not skip_tesseract and args.auto_install_tesseract:
         auto_install_tesseract()
     elif not skip_tesseract and backend == 'pytesseract':
         ensure_tesseract(args.tesseract_path, args.tessdata_path)
     target = app_environment(args.python)
+    if not skip_tesseract and backend == 'tesserocr':
+        install_tesserocr(target, args.tessdata_path, args.tesserocr_wheel)
     if selected is None:
-        requirements = 'requirements-tesserocr.txt' if not skip_tesseract and backend == 'tesserocr' else 'requirements.txt'
-        pip_install(target, '-r', str(ROOT/requirements))
+        pip_install(target, '-r', str(ROOT/'requirements.txt'))
     else:
         extras = sorted(selected - ({'tesseract'} if skip_tesseract else set()))
-        if 'easyocr' in selected:
-            pip_install(target, 'torch==2.14.1', 'torchvision==0.29.1')
         pip_install(target, '-e', str(ROOT) + ('['+','.join(extras)+']' if extras else ''))
-        if not skip_tesseract and backend == 'tesserocr':
-            pip_install(target, '--only-binary=tesserocr', 'tesserocr==2.10.0')
-    if not skip_tesseract and backend == 'tesserocr':
-        configure_tesserocr(target, args.tessdata_path)
     gpu = args.device == 'gpu' or (args.device == 'auto' and has_nvidia())
     gpu_engines = [engine for engine in ('rapidocr', 'paddleocr', 'easyocr')
                    if (selected is None or engine in selected) and (selected_gpu is None or engine in selected_gpu)]
@@ -78,15 +77,14 @@ def main(argv=None):
     if gpu:
         for engine in gpu_engines:
             try:
-                setup_engine(engine, 'gpu', args.python)
+                setup_engine(engine, 'gpu', args.python, **({'cuda': args.cuda} if args.cuda != 'auto' else {}))
                 results['gpu'][engine] = {'state': 'installed'}
             except Exception as error:
                 results['gpu'][engine] = {'state': 'failed', 'error': str(error)}
                 print(f'\n{engine} GPU setup failed: {error}', flush=True)
                 if engine == 'paddleocr':
-                    print('PaddleOCR GPU requires the approved paddlepaddle-gpu==3.3.1 Windows x64 / Python 3.12 CUDA build. '
-                          'The 2.6.x builds cannot satisfy this requirement. Plain PyPI installs also use the official Paddle CUDA index; '
-                          'a configured internal feed must mirror this wheel and dependencies.', flush=True)
+                    print('PaddleOCR 3 requires paddlepaddle-gpu>=3,<4. The 2.6.x builds cannot satisfy this requirement. '
+                          'Public installs use the selected CUDA source; internal feeds must supply a compatible GPU wheel and dependencies.', flush=True)
                 print('Continuing with the remaining selected GPU engines. No CPU fallback was used for GPU setup.', flush=True)
     if os.environ.get('OCRBENCH_INSTALL_UI') == '1':
         print('OCRBENCH_INSTALL_RESULT ' + json.dumps(results), flush=True)

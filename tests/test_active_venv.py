@@ -31,7 +31,7 @@ def test_running_venv_wins_over_existing_project_environment(monkeypatch, tmp_pa
     monkeypatch.setattr(installer, 'environment', lambda *args: pytest.fail('Must not create/reuse project .venv'))
     assert installer.app_python() == python
     assert installer.app_environment('base-python') == python
-    assert calls == [('validate', python), ('pip', python, 'pip>=25')]
+    assert calls == [('validate', python), ('pip', python, 'pip>=23.3')]
 
 
 def test_outside_venv_uses_project_environment(monkeypatch, tmp_path):
@@ -50,7 +50,7 @@ def test_unsupported_running_venv_fails_without_creating_another(monkeypatch, tm
     running_venv(monkeypatch, tmp_path)
     monkeypatch.setattr(installer.subprocess, 'check_output', lambda *args, **kwargs: '[3, 14, 64]')
     monkeypatch.setattr(installer, 'pip_install', lambda *args: pytest.fail('Unsupported venv must not be modified'))
-    with pytest.raises(RuntimeError, match='Python 3.12'):
+    with pytest.raises(RuntimeError, match='Python 3.10-3.13'):
         installer.app_environment('other-python312')
     assert not (installer.ROOT/'.venv').exists()
 
@@ -69,7 +69,7 @@ def test_entry_installs_app_into_running_venv_and_preserves_gpu_isolation(monkey
     engines = []
     monkeypatch.setattr(entry, 'setup_engine', lambda *args: engines.append(args))
     entry.main()
-    assert calls == [(python, 'pip>=25'), (python, '-r', str(entry.ROOT/'requirements.txt'))]
+    assert calls == [(python, 'pip>=23.3'), (python, '-r', str(entry.ROOT/'requirements.txt'))]
     assert engines == ([(engine, 'gpu', str(python)) for engine in ('rapidocr', 'paddleocr', 'easyocr')] if device == 'gpu' else [])
     assert not (entry.ROOT/'.venv').exists()
 
@@ -109,6 +109,6 @@ print(json.dumps({'target': str(target), 'installs': installs, 'launched': launc
     result = subprocess.check_output([str(python), '-c', code, str(project)], cwd=installer.ROOT, text=True)
     record = json.loads(result.splitlines()[-1])
     assert Path(record['target']) == python
-    assert record['installs'] == [[str(python), 'pip>=25']]
+    assert record['installs'] == [[str(python), 'pip>=23.3']]
     assert record['launched'][0][0] == str(python)
     assert not (project/'.venv').exists()

@@ -25,12 +25,13 @@ PAGE = Path(__file__).with_name('installer.html')
 def defaults():
     from ocrbench.native import tesseract_backend, tesseract_command, tesseract_data, tesserocr_data
     command = tesseract_command()
-    data = tesseract_data(command) if command else tesserocr_data()
+    backend = tesseract_backend()
+    data = tesserocr_data() if backend == 'tesserocr' or not command else tesseract_data(command)
     target = app_python()
     return {
         'target': str(target), 'active': active_python() is not None,
         'python': str(target) if target.exists() else sys.executable,
-        'backend': tesseract_backend() if command else 'skip',
+        'backend': backend if backend == 'tesserocr' or command else 'skip',
         'tesseract_path': command or '', 'tessdata_path': str(data) if data else '',
         'pip_config_path': str(user_pip_config_path()),
     }
@@ -39,7 +40,7 @@ def defaults():
 def install_arguments(values):
     if not isinstance(values, dict):
         raise ValueError('Expected installation options.')
-    allowed = {'device', 'backend', 'python', 'index_url', 'cert', 'tesseract_path', 'tessdata_path', 'engines', 'gpu_engines', 'auth_mode', 'token_user', 'access_token'}
+    allowed = {'device', 'backend', 'python', 'index_url', 'cert', 'tesseract_path', 'tessdata_path', 'tesserocr_wheel', 'engines', 'gpu_engines', 'auth_mode', 'token_user', 'access_token', 'cuda'}
     if values.keys() - allowed or any(not isinstance(v, str) for k,v in values.items() if k not in ('engines','gpu_engines')):
         raise ValueError('Invalid installation options.')
     if 'engines' in values:
@@ -57,7 +58,7 @@ def install_arguments(values):
     index = values.get('index_url', '').strip()
     access_token = values.get('access_token', '').strip()
     if bool(index) != bool(access_token) or (values.get('token_user', '').strip() and not access_token):
-        raise ValueError('Provide both the Artifactory URL and token, or leave both blank to use normal pip settings.')
+        raise ValueError('Provide both the Artifactory URL and token, or leave both blank to use public PyPI.')
     if access_token:
         parsed = urlsplit(values.get('index_url', '').strip())
         if parsed.scheme != 'https' or not parsed.hostname:
@@ -67,6 +68,11 @@ def install_arguments(values):
     if device not in ('cpu', 'auto', 'gpu') or backend not in ('skip', 'pytesseract', 'tesserocr', 'auto'):
         raise ValueError('Choose a valid device and Tesseract backend.')
     args = ['--device', device]
+    cuda = values.get('cuda', 'auto')
+    if cuda not in ('auto', 'cuda12', 'cuda13'):
+        raise ValueError('Choose a valid CUDA compatibility option.')
+    if cuda != 'auto':
+        args.extend(['--cuda', cuda])
     if 'engines' in values:
         args.extend(['--engines', ','.join(dict.fromkeys(values['engines']))])
     if 'gpu_engines' in values:
@@ -90,6 +96,8 @@ def install_arguments(values):
     else:
         args.extend(['--tesseract-backend', backend])
         fields = [('tessdata_path', '--tessdata-path')]
+        if backend == 'tesserocr':
+            fields.append(('tesserocr_wheel', '--tesserocr-wheel'))
         if backend == 'pytesseract':
             fields.append(('tesseract_path', '--tesseract-path'))
         for field, flag in fields:

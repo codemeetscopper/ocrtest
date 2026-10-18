@@ -216,6 +216,18 @@ class InstallUITests(unittest.TestCase):
             self.assertFalse(install_lifecycle.inspect_installation(python)['installed'])
             self.assertTrue(python.is_file())
             self.assertEqual(marker.read_text(),'preserve')
+            # Reinstall after removal, then exercise the actual CLI entry point.
+            subprocess.run([sys.executable,'-m','pip','--python',str(python),'install','--no-index','--no-deps',str(wheel)],check=True,capture_output=True)
+            self.assertTrue(install_lifecycle.inspect_installation(python)['installed'])
+            removed = subprocess.run([str(python),str(install_support.ROOT/'install.py'),'--uninstall'],
+                                     cwd=install_support.ROOT,check=True,capture_output=True,text=True)
+            self.assertIn('OCR Bench removed',removed.stdout)
+            self.assertFalse(install_lifecycle.inspect_installation(python)['installed'])
+            # Repeated uninstall is an idempotent no-op, without creating .venv.
+            repeated = subprocess.run([str(python),str(install_support.ROOT/'install.py'),'--uninstall'],
+                                      cwd=install_support.ROOT,check=True,capture_output=True,text=True)
+            self.assertIn('not installed',repeated.stdout)
+            self.assertEqual(marker.read_text(),'preserve')
 
     def test_no_arguments_open_ui_without_installing(self):
         with patch.object(install_ui, 'serve') as serve, patch.object(install, 'pip_install') as pip:
@@ -405,31 +417,35 @@ class InstallUITests(unittest.TestCase):
         with patch.object(install_support, 'environment', return_value='python312'), \
              patch.object(install_support, 'pip_install') as pip, patch('builtins.print'):
             install_support.setup_engine('easyocr', 'cpu', 'base-python')
-        self.assertEqual(pip.call_args_list[0].args, ('python312', 'torch==2.14.1', 'torchvision==0.29.1'))
+        self.assertEqual(pip.call_args_list[0].args, ('python312', '-e', str(install_support.ROOT)+'[easyocr]'))
 
-    def test_torch_pins_accept_internal_and_existing_cpu_builds(self):
+    def test_torch_ranges_accept_older_feed_and_existing_cpu_builds(self):
+        try:
+            import tomllib
+        except ImportError:
+            from pip._vendor import tomli as tomllib
         from packaging.requirements import Requirement
-        requirements = (install.ROOT/'requirements.txt').read_text().splitlines()
-        for name, version in [('torch', '2.14.1'), ('torchvision', '0.29.1')]:
-            req = Requirement(next(line for line in requirements if line.startswith(name+'==')))
-            self.assertIn(version, req.specifier)
-            self.assertIn(version+'+cpu', req.specifier)
-            self.assertNotIn('1.0.0', req.specifier)
+        extras=tomllib.loads((install.ROOT/'pyproject.toml').read_text())['project']['optional-dependencies']['easyocr']
+        for name,version in [('torch','2.7.0'),('torchvision','0.22.0')]:
+            req=Requirement(next(line for line in extras if line.startswith(name+'>=')))
+            self.assertIn(version,req.specifier)
+            self.assertIn(version+'+cpu',req.specifier)
+            self.assertNotIn('1.0.0',req.specifier)
 
     def test_real_pip_resolves_public_build_without_network(self):
         # A minimal inert local wheel exercises pip's resolver without installing torch.
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
-            wheel = directory/'torch-2.14.1-py3-none-any.whl'
-            info = 'torch-2.14.1.dist-info'
+            wheel = directory/'torch-2.7.0-py3-none-any.whl'
+            info = 'torch-2.7.0.dist-info'
             with zipfile.ZipFile(wheel, 'w') as archive:
-                archive.writestr(info+'/METADATA', 'Metadata-Version: 2.1\nName: torch\nVersion: 2.14.1\n')
+                archive.writestr(info+'/METADATA', 'Metadata-Version: 2.1\nName: torch\nVersion: 2.7.0\n')
                 archive.writestr(info+'/WHEEL', 'Wheel-Version: 1.0\nGenerator: installer-test\nRoot-Is-Purelib: true\nTag: py3-none-any\n')
                 archive.writestr(info+'/RECORD', '')
             command = [sys.executable, '-m', 'pip', 'install', '--dry-run', '--ignore-installed', '--no-index', '--no-deps', '--find-links', temporary]
-            new = subprocess.run([*command, 'torch==2.14.1'], capture_output=True, text=True)
+            new = subprocess.run([*command, 'torch>=2.4,<3'], capture_output=True, text=True)
             self.assertEqual(new.returncode, 0, new.stderr)
-            old = subprocess.run([*command, 'torch==2.14.1+cpu'], capture_output=True, text=True)
+            old = subprocess.run([*command, 'torch==2.7.0+cpu'], capture_output=True, text=True)
             self.assertNotEqual(old.returncode, 0)
 
 

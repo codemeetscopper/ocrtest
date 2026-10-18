@@ -55,12 +55,25 @@ def test_metric_definitions_are_available_and_exported(client):
 
 def test_missing_native_tesseract_is_not_reported_as_ready(client, monkeypatch):
     import ocrbench.server as server
+    monkeypatch.setattr(server, 'tesseract_backend', lambda: 'pytesseract')
     monkeypatch.setattr(server, 'tesseract_command', lambda: None)
     monkeypatch.setattr(server.importlib.util, 'find_spec', lambda package: object())
     engines = {e['id']:e for e in client.get('/api/system').json()['engines']}
     assert not engines['tesseract']['installed']
     assert engines['rapidocr']['installed']
     assert 'runtime required' in engines['tesseract']['status']
+
+
+def test_bundled_tesseract_can_be_ready_without_an_executable(client, monkeypatch, tmp_path):
+    import ocrbench.server as server
+    (tmp_path/'eng.traineddata').touch()
+    monkeypatch.setattr(server, 'tesseract_backend', lambda: 'tesserocr')
+    monkeypatch.setattr(server, 'tesseract_command', lambda: None)
+    monkeypatch.setattr(server, 'tesserocr_data', lambda: tmp_path)
+    monkeypatch.setattr(server.importlib.util, 'find_spec', lambda package: object())
+    system = client.get('/api/system').json()
+    assert system['tesseract_backend'] == 'tesserocr'
+    assert next(engine for engine in system['engines'] if engine['id'] == 'tesseract')['installed']
 
 
 def test_session_frame_image_is_reviewable_without_entering_dataset(client, tmp_path, monkeypatch):

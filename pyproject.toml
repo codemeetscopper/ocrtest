@@ -6,16 +6,16 @@ build-backend = "setuptools.build_meta"
 name = "automotive-ocr-bench"
 version = "0.1.0"
 description = "Local automotive HMI OCR benchmark workbench"
-requires-python = ">=3.10,<3.15"
-dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "python-multipart>=0.0.18", "Pillow>=11", "numpy>=2", "opencv-python-headless>=4.10", "psutil>=6", "scipy>=1.14", "regex>=2024.11", "shapely>=2", "openpyxl>=3.1,<4"]
+requires-python = ">=3.10,<3.14"
+dependencies = ["fastapi>=0.115,<1", "pydantic>=2,<3", "uvicorn>=0.30,<1", "python-multipart>=0.0.18", "Pillow>=10", "numpy>=1.26,<3", "opencv-python-headless>=4.10,<6", "psutil>=5.9", "scipy>=1.10,<2", "regex>=2023.3", "shapely>=2,<3", "openpyxl>=3.1,<4"]
 
 [project.optional-dependencies]
-rapidocr = ["rapidocr>=3.10,<4", "onnxruntime>=1.20,<2"]
-rapidocr-gpu = ["rapidocr>=3.10,<4", "onnxruntime-gpu[cuda,cudnn]==1.31.0"]
-easyocr = ["easyocr>=1.7,<2"]
-easyocr-gpu = ["easyocr==1.7.2"]
+rapidocr = ["rapidocr>=3.0,<4", "onnxruntime>=1.20,<2"]
+rapidocr-gpu = ["rapidocr>=3.0,<4", "onnxruntime-gpu[cuda,cudnn]>=1.20,<2"]
+easyocr = ["easyocr>=1.7,<2", "torch>=2.4,<3", "torchvision>=0.19,<1"]
+easyocr-gpu = ["easyocr>=1.7,<2", "torch>=2.4,<3", "torchvision>=0.19,<1"]
 paddleocr = ["paddleocr>=3,<4", "paddlepaddle>=3,<4"]
-paddleocr-gpu = ["paddleocr>=3.7,<3.8"]
+paddleocr-gpu = ["paddleocr>=3,<4"]
 tesseract = ["pytesseract>=0.3.13"]
 test = ["pytest>=8", "httpx>=0.28"]
 

@@ -1,6 +1,6 @@
 # All CPU Python components plus the approved Windows wheel containing Tesseract.
-# Mirror tesserocr 2.10.0 cp312 win_amd64 (bundled Tesseract 5.5.2) in Artifactory.
+# Supply a compatible Windows wheel for your Python version through the selected feed.
 # Models are a separate approved asset; supply --tessdata-path.
 -r requirements.txt
 --only-binary=tesserocr
-tesserocr==2.10.0
+tesserocr>=2.7,<3

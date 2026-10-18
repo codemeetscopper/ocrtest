@@ -1,6 +1,7 @@
 """Public versus private source routing and explicit native auto installation."""
 from contextlib import redirect_stdout
 import io
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -14,46 +15,64 @@ from scripts import install_support as support, install_ui
 
 
 class PublicInstallationTests(unittest.TestCase):
-    def test_effective_pip_settings_respect_private_and_offline_sources(self):
-        # Real pip parsing, no downloads. The target process reads the temporary config.
+    def setUp(self):
+        source = patch.object(support, '_package_source', {'mode':'public', 'index':support.PUBLIC_INDEX, 'cert':None})
+        source.start()
+        self.addCleanup(source.stop)
+
+    def test_blank_details_override_saved_and_environment_sources_for_this_install(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)/'pip.ini'
-            env = {k:v for k,v in os.environ.items() if not k.startswith('PIP_')}
-            env['PIP_CONFIG_FILE'] = str(path)
-            for settings, expected in [
-                ('index-url = https://pypi.org/simple\n', True),
-                ('index-url = https://user:fake-token@internal.example/simple\n', False),
-                ('index-url = https://pypi.org/simple\nextra-index-url = https://internal.example/simple\n', False),
-                ('index-url = https://pypi.org/simple\nno-index = true\n', False),
-                ('index-url = https://pypi.org/simple\nfind-links = /approved/wheels\n', False),
-            ]:
-                path.write_text('[install]\n'+settings)
-                with self.subTest(settings=settings),patch.dict(os.environ, env, clear=True):
-                    self.assertEqual(support.uses_public_pypi(sys.executable), expected)
-            path.write_text('[install]\nindex-url = https://pypi.org/simple\n')
-            env['PIP_INDEX_URL'] = 'https://internal.example/simple'
-            with patch.dict(os.environ, env, clear=True):
-                self.assertFalse(support.uses_public_pypi(sys.executable))
+            path.write_text('[install]\nindex-url = https://fake-token@internal.example/simple\nno-index = true\n')
+            before = path.read_bytes()
+            with patch.dict(os.environ, {'PIP_CONFIG_FILE':str(path),
+                        'PIP_INDEX_URL':'https://old.example/simple',
+                        'PIP_EXTRA_INDEX_URL':'https://extra.example/simple',
+                        'PIP_FIND_LINKS':'/old/wheels','PIP_NO_INDEX':'1',
+                        'OCRBENCH_INDEX_TOKEN':'','OCRBENCH_INDEX_USERNAME':''}),redirect_stdout(io.StringIO()):
+                support.configure_pip()
+                self.assertTrue(support.uses_public_pypi(sys.executable))
+                # Ask real pip to parse the environment used by install/build children.
+                code = ('import json;from pip._internal.commands import create_command;'
+                        'o,_=create_command("install").parse_args([]);'
+                        'print(json.dumps([o.index_url,o.extra_index_urls,o.find_links,o.no_index]))')
+                actual = json.loads(subprocess.check_output([sys.executable,'-I','-c',code],
+                                                            env=support.pip_environment(),text=True))
+                self.assertEqual(actual,['https://pypi.org/simple',[],[],False])
+            self.assertEqual(path.read_bytes(),before)
+
+    def test_explicit_artifactory_is_authoritative_even_with_public_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'pip.ini'
+            with patch.object(support,'user_pip_config_path',return_value=path), \
+                 patch.dict(os.environ,{'OCRBENCH_INDEX_TOKEN':'fake-token',
+                    'OCRBENCH_INDEX_USERNAME':'','PIP_INDEX_URL':'https://pypi.org/simple',
+                    'PIP_EXTRA_INDEX_URL':'https://old.example/simple'}),redirect_stdout(io.StringIO()):
+                support.configure_pip('https://internal.example/simple')
+                self.assertFalse(support.uses_public_pypi('target'))
+                env=support.pip_environment()
+                self.assertEqual(env['PIP_INDEX_URL'],'https://fake-token@internal.example/simple')
+                self.assertEqual(env['PIP_EXTRA_INDEX_URL'],'')
+                self.assertEqual(env['PIP_CONFIG_FILE'],os.devnull)
 
     def test_public_gpu_uses_official_vendor_indexes(self):
         for engine, host in [('easyocr','download.pytorch.org'), ('paddleocr','www.paddlepaddle.org.cn')]:
             with self.subTest(engine=engine),patch.object(support,'uses_public_pypi',return_value=True), \
-                 patch.object(support,'pip_install') as pip,redirect_stdout(io.StringIO()):
+                 patch.object(support,'pip_install') as pip,patch.object(support,'torch_needs_repair',return_value=False),redirect_stdout(io.StringIO()):
                 support.install_gpu_framework('target', engine)
-                self.assertIn('--extra-index-url',pip.call_args.args)
+                self.assertIn('--index-url' if engine == 'easyocr' else '--extra-index-url',pip.call_args.args)
                 self.assertIn(host,pip.call_args.args[2])
 
     def test_private_gpu_never_adds_public_sources(self):
         for engine in ['easyocr','paddleocr']:
             with self.subTest(engine=engine),patch.object(support,'uses_public_pypi',return_value=False), \
-                 patch.object(support,'pip_install') as pip,redirect_stdout(io.StringIO()):
+                 patch.object(support,'pip_install') as pip,patch.object(support,'torch_needs_repair',return_value=False),redirect_stdout(io.StringIO()):
                 support.install_gpu_framework('target',engine)
                 self.assertFalse(any('https://' in str(v) or 'index-url' in str(v) for v in pip.call_args.args))
 
-    def test_source_probe_failure_does_not_enable_public_sources(self):
-        with patch.object(support.subprocess,'check_output',side_effect=subprocess.TimeoutExpired('python',30)), \
-             self.assertRaisesRegex(RuntimeError,'public GPU sources were not enabled'):
-            support.uses_public_pypi('target')
+    def test_source_selection_does_not_import_target_pip(self):
+        with patch.object(support.subprocess,'check_output',side_effect=AssertionError('No pip source probe')):
+            self.assertTrue(support.uses_public_pypi('target-with-damaged-pip'))
 
     def test_auto_ui_ignores_hidden_existing_paths(self):
         args = install_ui.install_arguments({'backend':'auto','tesseract_path':'old.exe','tessdata_path':'old-data'})
@@ -65,7 +84,7 @@ class PublicInstallationTests(unittest.TestCase):
     def test_auto_cli_uses_native_backend_without_requesting_tesserocr(self):
         with patch.object(install,'configure_pip'),patch.object(install,'auto_install_tesseract') as auto, \
              patch.object(install,'app_environment',return_value='target'),patch.object(install,'pip_install') as pip, \
-             patch.object(install,'configure_tesserocr') as bundled,redirect_stdout(io.StringIO()):
+             patch.object(install,'install_tesserocr') as bundled,redirect_stdout(io.StringIO()):
             install.main(['--engines','tesseract','--auto-install-tesseract','--device','cpu'])
         auto.assert_called_once_with()
         bundled.assert_not_called()

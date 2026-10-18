@@ -4,36 +4,36 @@ A local Windows OCR benchmarking app with a browser workbench and a headless Pyt
 
 ## Install on a personal or work PC (Python only)
 
-Use **Windows x64 / Python 3.12**. See the complete [Artifactory installation guide](docs/internal-installation.md), including the package/build inventory, authentication, certificates, and offline model setup.
+Use **Windows x64 / Python 3.10–3.13**. See the complete [Artifactory installation guide](docs/internal-installation.md), including the package/build inventory, authentication, certificates, and offline model setup.
 
 Run `python install.py` with no arguments to open the local browser installer. Choose CPU/GPU support, Tesseract **Auto install (personal PC)**, installed Tesseract, bundled tesserocr, or no Tesseract, and optionally an internal pip URL and corporate CA bundle. The page shows the target environment and live installation output, including failures and retry. It uses Python's standard library and works before the dashboard packages are installed. Keep the terminal open; Ctrl+C closes the installer. Passing any arguments keeps command-line installation available.
 
-The installer appears as a modern card over an Ubuntu-inspired background. Components, Package source, and Environment are separate pages selected in the sidebar. Logs start collapsed; click **Details** to expand them, then drag the divider to resize. **Start Workbench** launches `start.py` in the installer's current environment; choose **Open Workbench** once it is ready.
+The installer appears as a compact card matching the workbench’s green and neutral theme. Components, Package source, and Environment are separate pages selected in the sidebar. Logs start collapsed; click **Details** to expand them, then drag the divider to resize. **Start Workbench** launches `start.py` in the installer's current environment; choose **Open Workbench** once it is ready.
 
-In **Package source**, provide both an Artifactory URL and token to save them to your user pip.ini before installation. The token is stored in plain text in that file, with an optional username, and kept out of installer logs and command arguments. Leave both fields blank to leave existing pip settings unchanged (PyPI is the default when no source is configured). All package installations then use pip normally. Existing installations offer **Modify / repair** and **Uninstall**. Uninstall runs from a neutral directory and verifies registration removal, while keeping shared libraries, environments, source files, models, and saved runs.
+In **Package source**, provide both an Artifactory URL and token to save them to your user pip.ini before installation. The token is stored in plain text in that file, with an optional username, and kept out of installer logs and command arguments. Leave both fields blank to select public PyPI and official GPU wheel sources, regardless of older saved source settings. Existing pip.ini files remain unchanged in public mode. Artifactory is used only when its URL and token are supplied for this installation; that mode uses the internal feed exclusively. Existing installations offer **Modify / repair** and **Uninstall**. Uninstall runs from a neutral directory and verifies registration removal, while keeping shared libraries, environments, source files, models, and saved runs.
 
 On a personal PC, leave the package-source fields blank. Plain PyPI installations automatically supplement GPU framework installs with the official Paddle and PyTorch CUDA indexes. Choose **Auto install (personal PC)** to install native Windows Tesseract and English data through WinGet, or reuse and verify an existing installation. This needs Windows App Installer and may show a Windows administrator prompt. The CLI equivalent is `python install.py --auto-install-tesseract --device auto`. This option uses pytesseract and does not require a tesserocr wheel.
 
-GPU engines can be selected independently of CPU components. A missing GPU package does not prevent attempts for the other selected engines: the installer retains successful setups and reports a partial result with a nonzero exit status. For all CPU components plus RapidOCR GPU only, use `python install.py --without-tesseract --device gpu --gpu-engines rapidocr`. Internal-feed installations require the selected CUDA wheels and dependencies in that feed, including `paddlepaddle-gpu==3.3.1`; the available 2.6.x builds do not satisfy that requirement. Private-source failures never trigger a public fallback.
+GPU engines can be selected independently of CPU components. A missing GPU package does not prevent attempts for the other selected engines: the installer retains successful setups and reports a partial result with a nonzero exit status. For all CPU components plus RapidOCR GPU only, use `python install.py --without-tesseract --device gpu --gpu-engines rapidocr`. Internal-feed installations require the selected CUDA wheels and dependencies in that feed, including `paddlepaddle-gpu>=3,<4`; the available 2.6.x builds do not satisfy that requirement. Private-source failures never trigger a public fallback.
 
-The app requirement now uses `torch==2.14.1` and `torchvision==0.29.1` without requiring the `+cpu` suffix. This accepts public-version builds mirrored in Artifactory and retains matching installed `+cpu` builds. GPU environments still require the approved CUDA builds listed below.
+Package requirements use API-compatible ranges rather than exact workstation pins. Pip resolves torch and torchvision together, and retains installed packages that satisfy the ranges. Internal feeds can supply older compatible releases; pip constraints may narrow these ranges to an organisation’s approved versions. Required API major versions and wheel/platform compatibility still apply.
 
-If IT has already configured pip for your internal repository:
+For a public installation on a personal Windows PC:
 
 ~~~text
-python install.py --tessdata-path "C:/OrgModels/tessdata"
+python install.py --auto-install-tesseract --device auto
 python start.py
 ~~~
 
-Or supply your PyPI simple-index URL explicitly:
+For an Artifactory installation, supply its simple-index URL and token explicitly:
 
 ~~~text
 python install.py --index-url "https://artifactory.example.com/artifactory/api/pypi/python-virtual/simple" --tessdata-path "C:/OrgModels/tessdata"
 ~~~
 
-Replace the URL with your own repository. The CLI securely prompts for the Artifactory token when a URL is supplied, or reads OCRBENCH_INDEX_TOKEN and optional OCRBENCH_INDEX_USERNAME for noninteractive use. These settings are saved to the user pip configuration, outside this checkout. Supply --cert to save a corporate CA bundle if needed. Without URL/token inputs, existing settings remain unchanged. Normal pip precedence applies, including environment-variable and per-venv overrides. A placeholder configuration example is in config/pip.ini.example.
+Replace the URL with your own repository. The CLI securely prompts for the Artifactory token when a URL is supplied, or reads OCRBENCH_INDEX_TOKEN and optional OCRBENCH_INDEX_USERNAME for noninteractive use. These settings are saved to the user pip configuration, outside this checkout. Supply --cert to save a corporate CA bundle if needed. Without URL/token inputs, setup uses public sources and leaves saved settings unchanged. The installation selects its source in the pip subprocess environment, so saved sources and inherited index variables do not override this choice. Supply Artifactory details again on each internal installer run. A placeholder configuration example is in config/pip.ini.example.
 
-Without a native-Tesseract option, the command-line installer installs all four CPU Python engines/frameworks and defaults to the **tesserocr wheel**, which contains the native Tesseract library. It does not require micromamba, Conda, PowerShell activation, or tesseract.exe. Your internal feed must include the approved Python 3.12 / Windows x64 tesserocr 2.10.0 wheel with bundled Tesseract 5.5.2. The eng.traineddata model is a separate approved asset supplied using --tessdata-path. Only the explicit Auto install option enables native Tesseract downloads.
+Without a native-Tesseract option, the command-line installer installs all four CPU Python engines/frameworks and defaults to the **tesserocr wheel**, which contains the native Tesseract library. It does not require micromamba, Conda, PowerShell activation, or tesseract.exe. Windows wheels are distributed through separate [upstream releases](https://github.com/simonflueckiger/tesserocr-windows_build/releases), rather than PyPI. Your internal feed must include a compatible Windows x64 tesserocr 2.x wheel, or provide one through **Bundled mode → Local wheel file** / `--tesserocr-wheel "C:/ApprovedPackages/tesserocr-…-cp312-cp312-win_amd64.whl"`. Setup verifies the bundled binary before the other components, without an automatic public fallback. The eng.traineddata model is a separate approved asset supplied using --tessdata-path. Only the explicit Auto install option enables native Tesseract downloads.
 
 requirements.txt installs the CPU Python components, including the legacy pytesseract wrapper. requirements-tesserocr.txt additionally installs the bundled library wheel. Both contain no public package-index directives. When run from an existing venv, the installer installs into that venv and start.py uses it too. Otherwise setup creates/reuses the project's .venv. Setup validates/persists the selected backend and model directory. Restart a running app after setup.
 
@@ -44,11 +44,11 @@ python install.py --device gpu --tessdata-path "C:/OrgModels/tessdata"
 python start.py --port 8766
 ~~~
 
-The default --device auto adds isolated CUDA environments when NVIDIA hardware is detected. CPU and CUDA framework builds must both be mirrored to the internal feed. A configured internal feed is respected; only plain public PyPI uses the official PyTorch/Paddle CUDA indexes automatically. Use --auto-install-tesseract on a personal PC, --without-tesseract to skip it, or --tesseract-backend pytesseract --tesseract-path with an existing approved executable. Tesseract remains CPU-only.
+The default --device auto adds isolated CUDA environments when NVIDIA hardware is detected. CPU and CUDA framework builds must both be mirrored to the internal feed. Public PyPI and official PyTorch/Paddle CUDA indexes are used by default. Only explicitly supplied Artifactory details enable internal-feed mode. Use --auto-install-tesseract on a personal PC, --without-tesseract to skip it, or --tesseract-backend pytesseract --tesseract-path with an existing approved executable. Tesseract remains CPU-only.
 
 All other engines also need approved model weights. Stage caches or configure explicit model paths before offline use; a pip index configures Python packages, not framework-specific model download URLs. Details and EasyOCR's download_enabled setting are in the installation guide.
 
-The bootstrap Python needs pip or ensurepip. Setup creates environments without activation scripts and fails with a nonzero exit code if a required artifact is missing. Open **http://127.0.0.1:8765** after launching. Keep this checkout because fixture data and worker sources live here.
+The bootstrap Python needs pip or ensurepip. If the controller or a GPU environment cannot load pip installation commands (for example, a bundled module is missing), setup repairs it offline from Python's bundled pip wheel, then resumes using the selected package source. This also works when damaged pip metadata reports a newer version than ensurepip. Setup creates environments without activation scripts and fails with a nonzero exit code if a required artifact is missing. Open **http://127.0.0.1:8765** after launching. Keep this checkout because fixture data and worker sources live here.
 
 ## Workbench workflow
 
@@ -67,7 +67,7 @@ The supplied fixture includes positive PHONE/MEDIA queries, an absent NAVIGATION
 
 ## Engines and isolation
 
-Python components use the configured pip source, with official vendor CUDA indexes added only for plain public PyPI. Tesseract can use an approved bundled tesserocr wheel, an existing native executable, or the explicit personal-PC Auto install option. All selected CPU Python components are available in the app environment. Existing isolated environments under .engines/<engine>/ are discovered and reused. Custom interpreters remain configurable in **Environments**. Each candidate runs in its own worker process. GPU builds always live in separate .engines/<engine>-gpu/ environments.
+Python components use public PyPI and official vendor CUDA indexes by default; supplied Artifactory details switch all Python packages to that feed. Tesseract can use an approved bundled tesserocr wheel, an existing native executable, or the explicit personal-PC Auto install option. All selected CPU Python components are available in the app environment. Existing isolated environments under .engines/<engine>/ are discovered and reused. Custom interpreters remain configurable in **Environments**. Each candidate runs in its own worker process. GPU builds always live in separate .engines/<engine>-gpu/ environments.
 
 To provision or repair one isolated engine:
 
@@ -80,7 +80,7 @@ python scripts/setup_engine.py --engine paddleocr --device gpu --python C:/Pytho
 python scripts/setup_engine.py --engine easyocr --device gpu --python C:/Python312/python.exe
 ~~~
 
-CUDA setup resolves the approved ONNX Runtime 1.31.0 CUDA/cuDNN extras, PaddlePaddle GPU 3.3.1 CUDA 13 wheel, and PyTorch 2.14.1+cu130 / torchvision 0.29.1+cu130 builds from your configured internal pip feed. GPU interpreters are discovered automatically. A compatible NVIDIA driver and real CUDA device are required. Real-image preflight rejects silent CPU fallback. ONNX may assign unsupported operations to CPU, which its observed-device identity explicitly describes. GPU utilization and VRAM telemetry remain unavailable.
+CUDA setup resolves compatible ONNX Runtime, Paddle GPU 3.x and PyTorch 2.x / torchvision builds from the configured source. Public GPU setup automatically selects CUDA 12 or 13 from the driver; use --cuda cuda12 or --cuda cuda13 to choose explicitly. Private feeds remain exclusive and provide their own approved builds. GPU interpreters are discovered automatically. A compatible NVIDIA driver and real CUDA device are required. Real-image preflight rejects silent CPU fallback. ONNX may assign unsupported operations to CPU, which its observed-device identity explicitly describes. GPU utilization and VRAM telemetry remain unavailable.
 
 The Paddle worker registers and preloads DLLs from its own pip NVIDIA folders, including nvidia/cu13/bin/x86_64 and nvidia/cudnn/bin, without editing system PATH. GPU synchronization uses paddle.device.synchronize. CPU Paddle defaults to enable_mkldnn=false because the tested Windows oneDNN route failed; overrides remain configurable.
 

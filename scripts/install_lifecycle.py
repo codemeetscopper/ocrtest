@@ -1,11 +1,10 @@
 """Inspect and remove the app registration without deleting shared environments."""
 import json
-import os
 from pathlib import Path
 import subprocess
 import tempfile
 
-from scripts.install_support import app_python, pip_controller, run
+from scripts.install_support import app_python, pip_controller, pip_environment, run
 
 PACKAGES = ('automotive-ocr-bench', 'rapidocr', 'paddleocr', 'easyocr', 'pytesseract', 'tesserocr')
 
@@ -32,13 +31,16 @@ def inspect_installation(python=None):
 
 def uninstall_app():
     target = app_python()
-    if not inspect_installation(target)['installed']:
+    installed = inspect_installation(target)
+    if installed.get('error'):
+        raise RuntimeError('Uninstall could not inspect this Python environment. Repair the environment and retry.')
+    if not installed['installed']:
         print('OCR Bench is not installed in this environment.')
         return
     # Editable source egg-info in the project cwd can shadow the installed
     # distribution and make pip report success without removing any files.
     with tempfile.TemporaryDirectory(prefix='ocrbench-uninstall-') as working:
-        env = os.environ.copy()
+        env = pip_environment()
         env.pop('PYTHONPATH', None)
         env.pop('PYTHONHOME', None)
         run([pip_controller(), '-I', '-m', 'pip', '--python', target, 'uninstall', '--yes', 'automotive-ocr-bench'], cwd=working, env=env)

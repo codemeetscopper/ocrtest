@@ -10,12 +10,12 @@ def test_unsupported_python_fails_before_environment_creation(monkeypatch, tmp_p
     calls = []
     monkeypatch.setattr(installer.subprocess, 'check_output', lambda *a, **k: json.dumps([3, 14, 64]))
     monkeypatch.setattr(installer, 'run', lambda args: calls.append(args))
-    with pytest.raises(RuntimeError, match='Python 3.12'):
+    with pytest.raises(RuntimeError, match='Python 3.10-3.13'):
         installer.environment(tmp_path/'new env', Path('Python 314/python.exe'))
     assert calls == []
 
 
-@pytest.mark.parametrize('engine,framework', [('easyocr', 'torch==2.14.1+cu130'), ('paddleocr', 'paddlepaddle-gpu==3.3.1')])
+@pytest.mark.parametrize('engine,framework', [('easyocr', 'torch>=2.4,<3'), ('paddleocr', 'paddlepaddle-gpu>=3,<4')])
 def test_gpu_framework_installed_before_ocr_extra(monkeypatch, tmp_path, engine, framework):
     target = tmp_path/'GPU env'/'python.exe'
     calls = []
@@ -23,6 +23,8 @@ def test_gpu_framework_installed_before_ocr_extra(monkeypatch, tmp_path, engine,
     monkeypatch.setattr(installer, 'environment', lambda directory, python: target)
     monkeypatch.setattr(installer, 'pip_install', lambda python, *args: calls.append((python, args)))
     monkeypatch.setattr(installer, 'uses_public_pypi', lambda python: False)
+    monkeypatch.setattr(installer, 'torch_needs_repair', lambda python: False)
+    monkeypatch.setattr(installer, 'cuda_family', lambda choice: 'cuda13')
     installer.setup_engine(engine, 'gpu', 'python312')
     assert calls[0][0] == target and framework in calls[0][1]
     assert calls[-1][1] == ('-e', f'{tmp_path}[{engine}-gpu]')
